@@ -1,0 +1,4603 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Windy Safi – GP2 Fusion</title>
+
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+
+  <style>
+    :root{
+      /* Couleurs harmonisées avec l'interface globale */
+      --bg-1: #0B0F0C; /* --background */
+      --bg-2: #0E1411; /* --background-secondary */
+      --panel: rgba(0, 0, 0, 0.6); /* --card */
+      --glass: rgba(255,255,255,0.04);
+      --accent: linear-gradient(90deg, #1E6B4F, #85D5FF); /* --primary to --accent */
+      --accent-solid: #1E6B4F; /* --primary */
+      --muted: rgba(234, 247, 240, 0.6); /* --muted-foreground */
+      --foreground: #FFFFFF; /* --foreground */
+    }
+
+    html, body { height:100%; margin:0; padding:0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background: linear-gradient(180deg,var(--bg-1), var(--bg-2)); color:var(--foreground); -webkit-font-smoothing:antialiased; }
+
+    #map-wrapper{ position:relative; width:100%; height:100%; }
+    #map{ width:100%; height:100%; position:relative; z-index:0; border-radius:0; overflow:hidden }
+
+    #wind-canvas{ position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:500 }
+
+
+    .leaflet-container{ background:transparent }
+
+    /* Layer toggle (left) */
+    #layer-toggle{ position:absolute; left:18px; top:18px; z-index:650; display:flex; gap:10px; align-items:center; padding:8px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:12px; box-shadow:0 6px 18px rgba(3,6,12,0.6); backdrop-filter: blur(6px); }
+
+    /* Bouton données favorites (top center) */
+    #btn-favorites-data{ position:absolute; top:18px; left:50%; transform:translateX(-50%); z-index:650; display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px; background:var(--accent); color:var(--foreground); border:none; cursor:pointer; font-weight:600; font-size:13px; transition:transform .12s ease, box-shadow .12s ease; user-select:none; box-shadow:0 8px 24px rgba(30,107,79,0.3); }
+    #btn-favorites-data:hover{ transform:translateX(-50%) translateY(-3px); box-shadow:0 10px 28px rgba(30,107,79,0.4); }
+    #btn-favorites-data:focus{ outline:2px solid rgba(30,107,79,0.3); box-shadow:0 6px 18px rgba(30,107,79,0.2); }
+    #btn-favorites-data .icon{ width:18px; height:18px; display:inline-block; opacity:0.95; }
+    .layer-btn{ display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px; background:transparent; color:var(--muted); border:none; cursor:pointer; font-weight:600; font-size:13px; transition:transform .12s ease, box-shadow .12s ease, color .12s ease; user-select:none }
+    .layer-btn .icon{ width:18px; height:18px; display:inline-block; opacity:0.95; }
+    .layer-btn:hover{ transform:translateY(-3px); color:var(--foreground) }
+    .layer-btn:focus{ outline:2px solid rgba(255,106,26,0.18); box-shadow:0 6px 18px rgba(255,106,26,0.08) }
+    .layer-btn.active{ background:var(--accent); color:var(--foreground); box-shadow:0 8px 24px rgba(30,107,79,0.3) }
+
+    /* Legend (bottom-left) */
+    #temp-legend{ position:absolute; left:18px; bottom:18px; z-index:600; background:var(--panel); padding:10px 12px; border-radius:10px; font-size:12px; color:var(--muted); box-shadow:0 10px 30px rgba(2,6,20,0.6); backdrop-filter: blur(6px); }
+    #legend-title{ font-weight:700; color:var(--foreground); font-size:13px; margin-bottom:6px }
+    #temp-legend-bar{ width:100%; height:12px; border-radius:6px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); background: linear-gradient(to right,#0000ff,#00ffff,#00ff00,#ffff00,#ff0000); border:1px solid rgba(255,255,255,0.04) }
+    #temp-legend-labels{ display:flex; justify-content:space-between; margin-top:8px; color:var(--muted); font-size:12px; flex-wrap: nowrap; }
+    #temp-legend-labels span{ white-space: nowrap; }
+
+    /* Station panel (top-right) */
+    #station-panel{ position:relative; z-index:2; width:100%; background:transparent; padding:0; border-radius:8px; box-shadow:none; backdrop-filter:none }
+    #station-panel h3{ margin:0; font-size:15px; color:var(--foreground); letter-spacing:0.2px }
+    #station-panel .row{ display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed rgba(255,255,255,0.03) }
+    #station-panel .row:last-child{ border-bottom:0 }
+    #station-panel .label{ color:var(--muted); font-size:12px }
+    #station-panel .value{ color:var(--foreground); font-weight:700 }
+
+
+    /* Hover info */
+    #hover-info{ position:absolute; z-index:700; background:var(--panel); color:var(--foreground); padding:10px; border-radius:8px; font-size:12px; pointer-events:none; display:none; max-width:240px; box-shadow:0 10px 24px rgba(0,0,0,0.4); border:1px solid rgba(14,107,87,0.15); transition:transform .18s ease, opacity .18s ease }
+    
+    /* Indicateur de chargement globe */
+    #globe-loading-indicator{ 
+      position:absolute; 
+      bottom:20px; 
+      left:20px; 
+      z-index:1000; 
+      background:var(--panel); 
+      color:var(--foreground); 
+      padding:12px 16px; 
+      border-radius:8px; 
+      font-size:13px; 
+      min-width:200px; 
+      box-shadow:0 4px 12px rgba(0,0,0,0.5); 
+      border:1px solid rgba(14,107,87,0.15);
+      display:none;
+      backdrop-filter: blur(10px);
+    }
+    #globe-loading-indicator.loading{ display:block; }
+    #globe-loading-indicator .loading-text{ 
+      margin-bottom:8px; 
+      font-weight:600; 
+      color:var(--foreground); 
+    }
+    #globe-loading-indicator .loading-bar-container{ 
+      width:100%; 
+      height:4px; 
+      background:rgba(255,255,255,0.1); 
+      border-radius:2px; 
+      overflow:hidden; 
+    }
+    /* Animation pour le marqueur de sélection */
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(1.2);
+        opacity: 0.8;
+      }
+    }
+
+    #globe-loading-indicator .loading-bar{ 
+      height:100%; 
+      background:linear-gradient(90deg, var(--accent-solid), #00d4ff); 
+      border-radius:2px; 
+      width:0%; 
+      transition:width 0.3s ease;
+      animation: loading-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes loading-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    /* Forecast panel */
+    #forecast-panel{ position:relative; z-index:2; width:100%; background:transparent; color:var(--muted); padding:0; border-radius:8px; box-shadow:none; display:none; backdrop-filter:none }
+    #forecast-panel h3{ margin:0 0 8px; color:var(--foreground) }
+    
+    /* Chatbot style Messenger */
+    .chatbot-icon{
+      position:fixed;
+      right:20px;
+      bottom:20px;
+      width:56px;
+      height:56px;
+      background:linear-gradient(135deg, #1E6B4F 0%, #85D5FF 100%);
+      border-radius:50%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      cursor:pointer;
+      z-index:1000;
+      box-shadow:0 8px 24px rgba(30,107,79,0.4);
+      transition:all 0.3s ease;
+      color:var(--foreground);
+    }
+    .chatbot-icon:hover{
+      transform:scale(1.1);
+      box-shadow:0 12px 32px rgba(30,107,79,0.6);
+    }
+    .chatbot-icon svg{
+      width:28px;
+      height:28px;
+    }
+    .chatbot-window{
+      position:fixed;
+      right:20px;
+      bottom:90px;
+      width:380px;
+      height:600px;
+      max-height:80vh;
+      background:#fff;
+      border-radius:16px;
+      box-shadow:0 20px 60px rgba(0,0,0,0.3);
+      z-index:999;
+      display:none;
+      flex-direction:column;
+      overflow:hidden;
+      animation:slideUp 0.3s ease;
+    }
+    .chatbot-window.open{
+      display:flex;
+    }
+    @keyframes slideUp{
+      from{
+        opacity:0;
+        transform:translateY(20px);
+      }
+      to{
+        opacity:1;
+        transform:translateY(0);
+      }
+    }
+    .chatbot-header{
+      background:linear-gradient(135deg, #1E6B4F 0%, #85D5FF 100%);
+      padding:16px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      color:var(--foreground);
+    }
+    .chatbot-avatar{
+      width:40px;
+      height:40px;
+      border-radius:50%;
+      background:rgba(255,255,255,0.2);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-shrink:0;
+    }
+    .chatbot-avatar svg{
+      width:24px;
+      height:24px;
+    }
+    .chatbot-header-info{
+      flex:1;
+    }
+    .chatbot-name{
+      font-weight:600;
+      font-size:15px;
+      margin-bottom:2px;
+    }
+    .chatbot-status{
+      font-size:12px;
+      opacity:0.9;
+    }
+    .chatbot-close-btn{
+      width:32px;
+      height:32px;
+      border:none;
+      background:rgba(255,255,255,0.2);
+      border-radius:50%;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:var(--foreground);
+      transition:background 0.2s;
+    }
+    .chatbot-close-btn:hover{
+      background:rgba(255,255,255,0.3);
+    }
+    .chatbot-close-btn svg{
+      width:18px;
+      height:18px;
+    }
+    .chatbot-messages{
+      flex:1;
+      overflow-y:auto;
+      padding:16px;
+      background:#f0f2f5;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .chatbot-messages::-webkit-scrollbar{
+      width:6px;
+    }
+    .chatbot-messages::-webkit-scrollbar-track{
+      background:transparent;
+    }
+    .chatbot-messages::-webkit-scrollbar-thumb{
+      background:rgba(0,0,0,0.2);
+      border-radius:3px;
+    }
+    .chatbot-message{
+      display:flex;
+      gap:8px;
+      align-items:flex-start;
+    }
+    .chatbot-message-user{
+      flex-direction:row-reverse;
+    }
+    .chatbot-message-avatar{
+      width:32px;
+      height:32px;
+      border-radius:50%;
+      background:linear-gradient(135deg, #1E6B4F 0%, #85D5FF 100%);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      flex-shrink:0;
+      color:var(--foreground);
+    }
+    .chatbot-message-user .chatbot-message-avatar{
+      background:linear-gradient(135deg, #1E6B4F 0%, #85D5FF 100%);
+    }
+    .chatbot-message-avatar svg{
+      width:18px;
+      height:18px;
+    }
+    .chatbot-message-content{
+      max-width:75%;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .chatbot-message-user .chatbot-message-content{
+      align-items:flex-end;
+    }
+    .chatbot-message-text{
+      padding:10px 14px;
+      border-radius:18px;
+      font-size:14px;
+      line-height:1.4;
+      word-wrap:break-word;
+    }
+    .chatbot-message-assistant .chatbot-message-text{
+      background:#fff;
+      color:#1c1e21;
+      border-bottom-left-radius:4px;
+    }
+    .chatbot-message-user .chatbot-message-text{
+      background:linear-gradient(135deg, #1E6B4F 0%, #85D5FF 100%);
+      color:var(--foreground);
+      border-bottom-right-radius:4px;
+    }
+    .chatbot-message-time{
+      font-size:11px;
+      color:#8a8d91;
+      padding:0 4px;
+    }
+    .chatbot-input-container{
+      padding:12px;
+      background:#fff;
+      border-top:1px solid #e4e6eb;
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .chatbot-input{
+      flex:1;
+      padding:10px 14px;
+      border:1px solid #e4e6eb;
+      border-radius:20px;
+      font-size:14px;
+      outline:none;
+      transition:border-color 0.2s;
+    }
+    .chatbot-input:focus{
+      border-color:#667eea;
+    }
+    .chatbot-send-btn{
+      width:40px;
+      height:40px;
+      border:none;
+      background:linear-gradient(135deg, #1E6B4F 0%, #85D5FF 100%);
+      border-radius:50%;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      color:var(--foreground);
+      transition:transform 0.2s;
+      flex-shrink:0;
+    }
+    .chatbot-send-btn:hover{
+      transform:scale(1.1);
+    }
+    .chatbot-send-btn svg{
+      width:20px;
+      height:20px;
+    }
+    .chatbot-loading{
+      display:flex;
+      gap:4px;
+      padding:10px 14px;
+    }
+    .chatbot-loading-dot{
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:#8a8d91;
+      animation:bounce 1.4s infinite;
+    }
+    .chatbot-loading-dot:nth-child(2){
+      animation-delay:0.2s;
+    }
+    .chatbot-loading-dot:nth-child(3){
+      animation-delay:0.4s;
+    }
+    @keyframes bounce{
+      0%,80%,100%{
+        transform:scale(0);
+      }
+      40%{
+        transform:scale(1);
+      }
+    }
+    @media (max-width: 768px){
+      .chatbot-window{
+        width:calc(100vw - 40px);
+        left:20px;
+        right:20px;
+        height:70vh;
+      }
+    }
+    #forecast-hour{ color:var(--foreground); font-weight:700 }
+    .forecast-mode-tabs{ display:flex; gap:6px; margin-bottom:10px }
+    .forecast-mode-btn{ flex:1; padding:8px; background:rgba(255,255,255,0.04); color:var(--muted); border:1px solid rgba(255,255,255,0.08); border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; transition:all .12s ease }
+    .forecast-mode-btn:hover{ background:rgba(255,255,255,0.08); color:var(--foreground) }
+    .forecast-mode-btn.active{ background:var(--accent-solid); color:var(--foreground); border-color:var(--accent-solid) }
+    .forecast-content{ display:none }
+    .forecast-content.active{ display:block }
+    /* Slider d'heure dans le panneau */
+    #forecast-slider{ 
+      width:100%; 
+      margin-top:12px; 
+      appearance:none; 
+      height:8px; 
+      border-radius:6px; 
+      background:linear-gradient(90deg,#2b2f42, #1b1e2b); 
+      outline:none;
+      cursor: pointer;
+    }
+    #forecast-slider::-webkit-slider-thumb{ 
+      -webkit-appearance:none; 
+      width:18px; 
+      height:18px; 
+      border-radius:50%; 
+      background:var(--accent-solid); 
+      box-shadow:0 6px 18px rgba(255,106,26,0.18); 
+      cursor:pointer;
+      transition: transform 0.1s ease;
+    }
+    #forecast-slider::-webkit-slider-thumb:hover{
+      transform: scale(1.2);
+    }
+    #forecast-slider::-moz-range-thumb{
+      width:18px;
+      height:18px;
+      border-radius:50%;
+      background:var(--accent-solid);
+      box-shadow:0 6px 18px rgba(255,106,26,0.18);
+      cursor:pointer;
+      border:none;
+    }
+    
+    /* Style du menu déroulant des modèles */
+    #forecast-model, #ml-models-select{
+      width: 100%;
+      padding: 8px 36px 8px 12px;
+      background-color: rgba(255,255,255,0.04);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .12s ease;
+      font-family: inherit;
+      outline: none;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+    }
+    #forecast-model:hover{
+      background-color: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.12);
+    }
+    #forecast-model:focus{
+      background-color: rgba(255,255,255,0.08);
+      border-color: var(--accent-solid);
+      box-shadow: 0 0 0 2px rgba(255,106,26,0.18);
+    }
+    #forecast-model option{
+      background: rgba(2,6,20,0.98);
+      color: #fff;
+      padding: 10px 12px;
+      font-weight: 600;
+      font-size: 12px;
+    }
+    #forecast-model option:checked,
+    #forecast-model option:focus{
+      background: var(--accent-solid);
+      color: white;
+    }
+    /* Pour Firefox */
+    @-moz-document url-prefix() {
+      #forecast-model option{
+        background-color: rgba(2,6,20,0.98);
+      }
+      #forecast-model option:checked{
+        background-color: var(--accent-solid);
+      }
+    }
+    
+    /* Style du bouton "Retour au temps réel" */
+    #forecast-close{
+      width: 100%;
+      margin-top: 10px;
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .12s ease;
+      font-family: inherit;
+      outline: none;
+    }
+    #forecast-close:hover{
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      border-color: rgba(255,255,255,0.12);
+      transform: translateY(-2px);
+    }
+    #forecast-close:active{
+      transform: translateY(0);
+    }
+    #forecast-close:focus{
+      border-color: var(--accent-solid);
+      box-shadow: 0 0 0 2px rgba(255,106,26,0.18);
+    }
+
+    /* Main control panel */
+    #control-panel{ position:absolute; right:18px; top:18px; z-index:660; width:320px; max-height:76vh; background:linear-gradient(180deg, rgba(2,6,20,0.9), rgba(6,8,15,0.78)); padding:12px; border-radius:12px; box-shadow:0 18px 48px rgba(2,6,20,0.6); backdrop-filter: blur(8px); overflow:auto }
+    #control-panel .panel-header{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px }
+    #control-panel .title{ font-size:15px; font-weight:700; color:var(--foreground) }
+    #control-panel .subtitle{ font-size:12px; color:var(--muted) }
+    .control-section{ margin-top:8px; padding:8px; background:rgba(255,255,255,0.02); border-radius:8px }
+    .layer-list{ display:flex; flex-direction:column; gap:8px }
+    .layer-btn{ width:100%; justify-content:flex-start }
+    #temp-legend{ position:relative; left:auto; bottom:auto; margin:8px 0 }
+
+    /* Timeline slider en bas (comme Windy) */
+    #forecast-timeline{
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 80px;
+      background: linear-gradient(180deg, rgba(2,6,20,0.95), rgba(6,8,15,0.9));
+      backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(255,255,255,0.1);
+      z-index: 600;
+      display: none;
+      padding: 12px 20px;
+      box-shadow: 0 -10px 30px rgba(2,6,20,0.6);
+    }
+    #forecast-timeline.active{
+      display: block;
+    }
+    #timeline-container{
+      display: flex;
+      align-items: center;
+      gap: 15px;
+      height: 100%;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    #timeline-play-btn{
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      flex-shrink: 0;
+    }
+    #timeline-play-btn:hover{
+      background: rgba(255,255,255,0.15);
+      transform: scale(1.1);
+    }
+    #timeline-play-btn.playing{
+      background: var(--accent-solid);
+      border-color: var(--accent-solid);
+    }
+    #timeline-slider-wrapper{
+      flex: 1;
+      position: relative;
+      height: 50px;
+      display: flex;
+      align-items: center;
+    }
+    #timeline-day-slider{
+      width: 100%;
+      height: 6px;
+      appearance: none;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+      position: relative;
+    }
+    #timeline-day-slider::-webkit-slider-thumb{
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent-solid);
+      box-shadow: 0 4px 12px rgba(255,106,26,0.4);
+      cursor: pointer;
+      transition: transform 0.1s ease;
+    }
+    #timeline-day-slider::-webkit-slider-thumb:hover{
+      transform: scale(1.3);
+    }
+    #timeline-day-slider::-moz-range-thumb{
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent-solid);
+      box-shadow: 0 4px 12px rgba(255,106,26,0.4);
+      cursor: pointer;
+      border: none;
+    }
+    #timeline-labels{
+      position: absolute;
+      top: -25px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--muted);
+      pointer-events: none;
+    }
+    .timeline-day-marker{
+      position: absolute;
+      top: -20px;
+      width: 1px;
+      height: 8px;
+      background: rgba(255,255,255,0.3);
+      transform: translateX(-50%);
+    }
+    #timeline-current-time{
+      position: absolute;
+      top: -45px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--accent-solid);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(255,106,26,0.3);
+    }
+    #timeline-current-time::after{
+      content: '';
+      position: absolute;
+      bottom: -4px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 4px solid transparent;
+      border-right: 4px solid transparent;
+      border-top: 4px solid var(--accent-solid);
+    }
+
+    /* Responsive tweaks */
+    @media (max-width:760px){
+      #station-panel, #forecast-panel{ width:100%; right:12px; top:12px }
+      #layer-toggle{ left:12px; top:12px }
+      #temp-legend{ left:12px; bottom:12px }
+      #control-panel{ width:92%; right:4%; left:auto; top:10px; max-height:60vh }
+      #forecast-timeline{
+        height: 70px;
+        padding: 10px 15px;
+      }
+      #timeline-container{
+        gap: 10px;
+      }
+      #timeline-play-btn{
+        width: 35px;
+        height: 35px;
+      }
+      .chatbot-icon{
+        right:12px;
+        bottom:12px;
+        width:50px;
+        height:50px;
+      }
+      .chatbot-window{
+        right:12px;
+        bottom:70px;
+        width:calc(100% - 24px);
+        max-width:380px;
+        height:calc(100vh - 100px);
+        max-height:calc(100vh - 100px);
+      }
+    }
+  </style>
+
+</head>
+
+<body>
+  <div id="map-wrapper">
+    <div id="map"></div>
+    <canvas id="wind-canvas"></canvas>
+    <div id="cesiumContainer" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 400;"></div>
+    
+    <!-- Indicateur de chargement pour le mode globe -->
+    <div id="globe-loading-indicator">
+      <div class="loading-text">Chargement des données...</div>
+      <div class="loading-bar-container">
+        <div class="loading-bar" id="globe-loading-bar"></div>
+      </div>
+    </div>
+
+    <!-- Unified control panel -->
+    <aside id="control-panel" role="region" aria-label="Contrôles">
+      <div class="panel-header">
+        <div>
+          <div class="title">Windy Safi — GP2 Fusion</div>
+          <div class="subtitle">Affichage & contrôles</div>
+        </div>
+      </div>
+
+      <div class="control-section">
+        <div class="layer-list">
+          <button id="btn-temp" class="layer-btn active" title="Température">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2v10.5" stroke="white" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M7 12.5a5 5 0 0 0 10 0c0-2.76-2.24-5-5-5s-5 2.24-5 5z" stroke="white" stroke-opacity="0.9" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Température</span>
+          </button>
+
+          <button id="btn-rh" class="layer-btn" title="Humidité">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3s4 4.5 4 8.5a4 4 0 1 1-8 0C8 7.5 12 3 12 3z" stroke="white" stroke-opacity="0.95" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Humidité</span>
+          </button>
+
+          <button id="btn-forecast" class="layer-btn" title="Prévisions">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 12h18M12 3v18" stroke="white" stroke-opacity="0.95" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>Prévisions</span>
+          </button>
+
+          <button id="btn-globe" class="layer-btn" title="Globe 3D">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="white" stroke-opacity="0.95" stroke-width="1.2" fill="none"/><path d="M2 12h20M12 2a15.3 15.3 0 0 0 0 20M12 2a15.3 15.3 0 0 1 0 20" stroke="white" stroke-opacity="0.95" stroke-width="1.2"/></svg>
+            <span>Globe</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="control-section" id="isobar-control" style="display: none;">
+        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--muted); font-size: 13px;">
+          <input type="checkbox" id="toggle-isobars" style="width: 18px; height: 18px; cursor: pointer;">
+          <span>Afficher les lignes isobares</span>
+        </label>
+      </div>
+
+      <div class="control-section">
+        <button id="btn-center-station" class="layer-btn" title="Centrer sur la station GP2">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="white" stroke-opacity="0.95" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="12" cy="12" r="3" stroke="white" stroke-opacity="0.95" stroke-width="1.2" fill="none"/>
+          </svg>
+          <span>Centrer sur GP2</span>
+        </button>
+      </div>
+
+      <div class="control-section">
+        <button id="btn-favorites" class="layer-btn" title="Gérer les positions favorites">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="white" stroke-opacity="0.95" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Positions favorites</span>
+        </button>
+      </div>
+
+      <div class="control-section">
+        <div id="temp-legend">
+          <div id="legend-title">Température (°C)</div>
+          <div id="temp-legend-bar"></div>
+          <div id="temp-legend-labels">
+            <span id="tmin">min</span>
+            <span id="tmax">max</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="control-section">
+        <div id="station-panel">
+          <h3 id="st-name">Station GP2</h3>
+          <div class="row"><span class="label">Dernière mesure :</span> <span class="value" id="st-time">--</span></div>
+          <div class="row"><span class="label">Temp :</span> <span class="value" id="st-temp">--</span></div>
+          <div class="row"><span class="label">Vitesse :</span> <span class="value" id="st-speed">--</span></div>
+          <div class="row"><span class="label">Direction :</span> <span class="value" id="st-dir">--</span></div>
+          <div class="row"><span class="label">Humidité :</span> <span class="value" id="st-rh">--</span></div>
+        </div>
+      </div>
+
+
+      <div class="control-section">
+        <div id="forecast-panel">
+          <h3>Prévisions</h3>
+          <div class="forecast-mode-tabs">
+            <button class="forecast-mode-btn active" data-mode="api" id="forecast-mode-api">API Open-Meteo</button>
+            <button class="forecast-mode-btn" data-mode="timeseries" id="forecast-mode-ts">Série Temporelle</button>
+          </div>
+          <div id="forecast-api" class="forecast-content active">
+            <div style="margin-bottom: 10px;">
+              <label style="display: block; margin-bottom: 6px; font-size: 12px; color: var(--muted);">Modèle météorologique :</label>
+              <select id="forecast-model">
+                <option value="auto">Auto (meilleur disponible)</option>
+                <option value="ecmwf_ifs">ECMWF IFS (Europe)</option>
+                <option value="gfs_seamless">GFS Seamless (NOAA - USA)</option>
+                <option value="gem_global">CMC GEM Global (Canada)</option>
+                <option value="icon_eu">DWD ICON EU (Allemagne)</option>
+                <option value="icon_global">DWD ICON Global (Allemagne)</option>
+              </select>
+            </div>
+            <div style="margin-bottom: 10px;">
+              <label style="display: block; margin-bottom: 6px; font-size: 12px; color: var(--muted);">Heure : <span id="forecast-hour">00:00</span></label>
+              <input type="range" id="forecast-slider" min="0" max="23" step="1" value="0" style="width: 100%;" />
+            </div>
+          </div>
+          <div id="forecast-ts" class="forecast-content">
+            <div style="margin-bottom: 10px;">
+              <label style="display: block; margin-bottom: 6px; font-size: 12px; color: var(--muted);">Modèles ML :</label>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer;">
+                  <input type="checkbox" class="ml-model-checkbox" value="xgb" checked>
+                  <span>XGBoost</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer;">
+                  <input type="checkbox" class="ml-model-checkbox" value="lgbm" checked>
+                  <span>LightGBM</span>
+                </label>
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; cursor: pointer;">
+                  <input type="checkbox" class="ml-model-checkbox" value="hgbr" checked>
+                  <span>Histogram Gradient Boosting</span>
+                </label>
+              </div>
+            </div>
+            <button id="ml-forecast-btn" style="width: 100%; padding: 8px; margin-bottom: 10px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer;">
+              Générer les prédictions ML
+            </button>
+            <div id="ml-forecast-results" style="max-height: 400px; overflow-y: auto; font-size: 11px;">
+              <div style="padding: 12px; background: rgba(255,255,255,0.02); border-radius: 6px; text-align: center; color: var(--muted);">
+                Cliquez sur "Générer les prédictions ML" pour afficher les prédictions
+              </div>
+            </div>
+          </div>
+          <button id="forecast-close">Retour au temps réel</button>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- Bouton données favorites (top center) -->
+    <button id="btn-favorites-data" title="Voir les données des positions favorites">
+      <svg class="icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Données favorites</span>
+    </button>
+
+    <!-- Modal de données des positions favorites -->
+    <div id="favorites-data-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 2000; align-items: center; justify-content: center; pointer-events: none;">
+      <div id="favorites-data-modal-content" style="background: var(--bg-2); border-radius: 12px; padding: 20px; max-width: 800px; width: 90%; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.5); pointer-events: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: sticky; top: 0; background: var(--bg-2); padding-bottom: 10px; z-index: 10;">
+          <h3 style="margin: 0; color: #fff; font-size: 18px;">Données des positions favorites</h3>
+          <button id="favorites-data-modal-close" style="background: rgba(255,255,255,0.1); border: none; color: #fff; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 20px; line-height: 1;">×</button>
+        </div>
+        <div id="favorites-data-list" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Les données des positions favorites seront affichées ici -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de gestion des positions favorites -->
+    <div id="favorites-modal" style="display: none; position: fixed; top: 0; right: 0; bottom: 0; width: 400px; background: rgba(0,0,0,0.85); z-index: 2000; pointer-events: none; overflow-y: auto;">
+      <div id="favorites-modal-content" style="background: var(--bg-2); padding: 20px; height: 100%; overflow-y: auto; box-shadow: -4px 0 20px rgba(0,0,0,0.5); pointer-events: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: sticky; top: 0; background: var(--bg-2); padding-bottom: 10px; z-index: 10;">
+          <h3 style="margin: 0; color: #fff; font-size: 16px;">Positions favorites</h3>
+          <button id="favorites-modal-close" style="background: rgba(255,255,255,0.1); border: none; color: #fff; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 18px; line-height: 1; flex-shrink: 0;">×</button>
+        </div>
+        
+        <div style="margin-bottom: 15px;">
+          <button id="btn-add-favorite" style="width: 100%; padding: 8px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 13px;">
+            + Ajouter une position
+          </button>
+        </div>
+
+        <div id="favorites-list" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Liste des positions favorites -->
+        </div>
+
+        <!-- Formulaire d'ajout/modification -->
+        <div id="favorite-form" style="display: none; margin-top: 15px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+          <h4 style="margin: 0 0 12px; color: #fff; font-size: 14px;" id="favorite-form-title">Ajouter une position</h4>
+          <div id="favorite-select-hint" style="display: none; margin-bottom: 10px; padding: 8px; background: rgba(0, 200, 255, 0.2); border: 1px solid rgba(0, 200, 255, 0.4); border-radius: 6px; color: #00c8ff; font-size: 11px; text-align: center;">
+            Cliquez sur la carte pour sélectionner une position
+          </div>
+          <div style="margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px;">Nom :</label>
+            <input type="text" id="favorite-name-input" style="width: 100%; padding: 6px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 13px; box-sizing: border-box;" placeholder="Nom de la position">
+          </div>
+          <div style="margin-bottom: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <label style="color: var(--muted); font-size: 12px;">Coordonnées :</label>
+              <button id="btn-select-on-map" type="button" style="padding: 3px 8px; background: rgba(0, 200, 255, 0.2); border: 1px solid rgba(0, 200, 255, 0.4); border-radius: 4px; color: #00c8ff; font-size: 10px; cursor: pointer; font-weight: 600;">Sélectionner</button>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 3px; color: var(--muted); font-size: 11px;">Latitude :</label>
+                <input type="number" id="favorite-lat-input" step="0.00001" style="width: 100%; padding: 6px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 12px; box-sizing: border-box;" placeholder="32.23233">
+              </div>
+              <div style="flex: 1;">
+                <label style="display: block; margin-bottom: 3px; color: var(--muted); font-size: 11px;">Longitude :</label>
+                <input type="number" id="favorite-lon-input" step="0.00001" style="width: 100%; padding: 6px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: #fff; font-size: 12px; box-sizing: border-box;" placeholder="-9.25156">
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button id="favorite-form-save" style="flex: 1; padding: 8px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 12px;">Enregistrer</button>
+            <button id="favorite-form-cancel" style="flex: 1; padding: 8px; background: rgba(255,255,255,0.1); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px;">Annuler</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Icône flottante chatbot (style Messenger) -->
+    <div id="chatbot-icon" class="chatbot-icon">
+      <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+        <circle cx="9" cy="10" r="1.5"/>
+        <circle cx="15" cy="10" r="1.5"/>
+      </svg>
+    </div>
+
+    <!-- Fenêtre de chat style Messenger -->
+    <div id="chatbot-window" class="chatbot-window">
+      <div class="chatbot-header">
+        <div class="chatbot-avatar">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+          </svg>
+        </div>
+        <div class="chatbot-header-info">
+          <div class="chatbot-name">Assistant Météo</div>
+          <div class="chatbot-status">En ligne</div>
+        </div>
+        <button id="chatbot-close-btn" class="chatbot-close-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+          </svg>
+        </button>
+      </div>
+      <div id="chatbot-messages" class="chatbot-messages">
+        <div class="chatbot-message chatbot-message-assistant">
+          <div class="chatbot-message-avatar">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+            </svg>
+          </div>
+          <div class="chatbot-message-content">
+            <div class="chatbot-message-text">Bonjour ! Je suis votre assistant météorologique. Posez-moi des questions sur les données de la station GP2 ou les prévisions Open-Meteo.</div>
+            <div class="chatbot-message-time">Maintenant</div>
+          </div>
+        </div>
+      </div>
+      <div class="chatbot-input-container">
+        <input type="text" id="chatbot-input" class="chatbot-input" placeholder="Tapez votre message..." />
+        <button id="chatbot-send-btn" class="chatbot-send-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Bulle info curseur -->
+    <div id="hover-info"></div>
+
+    <!-- Timeline slider en bas (comme Windy) -->
+    <div id="forecast-timeline">
+      <div id="timeline-container">
+        <button id="timeline-play-btn" title="Lecture/Pause">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+        </button>
+        <div id="timeline-slider-wrapper">
+          <div id="timeline-current-time">Aujourd'hui - 00:00</div>
+          <div id="timeline-labels"></div>
+          <input type="range" id="timeline-day-slider" min="0" max="6" step="1" value="0" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <!-- CesiumJS pour le globe 3D -->
+  <script>
+    window.CESIUM_BASE_URL = 'https://cdn.jsdelivr.net/npm/cesium@1.112.0/Build/Cesium/';
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/cesium@1.112.0/Build/Cesium/Cesium.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/cesium@1.112.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+
+
+  <script>
+    // =======================================================
+    // CARTE 2D LEAFLET
+    // =======================================================
+    const map = L.map('map').setView([32.23233, -9.25156], 11);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 19, attribution: '&copy; Esri'
+    }).addTo(map);
+
+    const canvas = document.getElementById('wind-canvas');
+    const ctx = canvas.getContext('2d');
+    const hoverDiv = document.getElementById('hover-info');
+
+    function resizeCanvas() {
+      const size = map.getSize();
+      canvas.width = size.x;
+      canvas.height = size.y;
+    }
+    map.on('resize', resizeCanvas);
+    resizeCanvas();
+
+    // =======================================================
+    // ÉTAT UI
+    // =======================================================
+    let selectedLayer = 'temp';      // 'temp' | 'rh'
+    let forecastMode = false;        // true quand on affiche les prévisions
+    let stationMarker = null;
+
+    let lastField = null;            // données temps réel (/api/fields)
+    let forecastField = null;        // données prévision (/api/forecast?hour=H)
+    let gridBounds = null;
+
+    const particles = [];
+    const N_PARTICLES = 100; // Réduit de 500 à 100 pour améliorer les performances
+
+    let lastMouse = null;
+    let hoverTimeout = null;
+
+    // Boutons couches
+    const btnTemp = document.getElementById('btn-temp');
+    const btnRh = document.getElementById('btn-rh');
+    const btnForecast = document.getElementById('btn-forecast');
+    const btnGlobe = document.getElementById('btn-globe');
+
+
+    function setActiveButton(id) {
+      [btnTemp, btnRh, btnForecast, btnGlobe].forEach(b => b.classList.remove('active'));
+      if (id) document.getElementById(id).classList.add('active');
+    }
+
+    btnTemp.onclick = () => {
+      selectedLayer = 'temp';
+      setActiveButton('btn-temp');
+      document.getElementById('legend-title').textContent = 'Température (°C)';
+      document.getElementById('temp-legend-bar').style.background =
+        'linear-gradient(to right,#0000ff,#00ffff,#00ff00,#ffff00,#ff0000)';
+      if (isGlobeMode && globe3D) {
+        globe3D.currentLayer = 'temp';
+        updateGlobeTexture();
+      } else {
+      drawLayer();
+      }
+    };
+
+    btnRh.onclick = () => {
+      selectedLayer = 'rh';
+      setActiveButton('btn-rh');
+      document.getElementById('legend-title').textContent = 'Humidité relative (%)';
+      document.getElementById('temp-legend-bar').style.background =
+        'linear-gradient(to right,#001bff,#5b7bff,#9f6bff,#d28bff,#ffffff)';
+      if (isGlobeMode && globe3D) {
+        globe3D.currentLayer = 'rh';
+        updateGlobeTexture();
+      } else {
+      drawLayer();
+      }
+    };
+
+    // =======================================================
+    // MODE GLOBE 3D
+    // =======================================================
+    let globe3D = null;
+    let isGlobeMode = false;
+
+    // Gestionnaire pour le toggle isobare
+    const toggleIsobars = document.getElementById('toggle-isobars');
+    if (toggleIsobars) {
+      toggleIsobars.addEventListener('change', (e) => {
+        if (!globe3D) return;
+        
+        globe3D.isobarsEnabled = e.target.checked;
+        
+        if (globe3D.isobarsEnabled) {
+          // Activer les isobares - utiliser setTimeout pour éviter de bloquer le thread
+          if (globe3D.globalData && globe3D.globalData.pressure) {
+            console.log('[Globe] Activation isobares...');
+            // Utiliser requestAnimationFrame pour ne pas bloquer
+            requestAnimationFrame(() => {
+              setTimeout(() => {
+                updateIsobars();
+              }, 100);
+            });
+          } else {
+            console.warn('[Globe] Pas de données de pression disponibles');
+            e.target.checked = false;
+            globe3D.isobarsEnabled = false;
+          }
+        } else {
+          // Désactiver les isobares
+          if (globe3D.isobarEntities) {
+            globe3D.isobarEntities.forEach(entity => {
+              globe3D.entities.remove(entity);
+            });
+            globe3D.isobarEntities = [];
+          }
+        }
+      });
+    }
+
+    // Fonction pour centrer et zoomer sur la station en mode 2D
+    function centerOnStation2D(lat, lon) {
+      if (!map) return;
+      map.setView([lat, lon], 14, { animate: true, duration: 1.0 });
+      console.log('[2D] Centré sur la station GP2:', lat, lon);
+    }
+
+    // Fonction pour centrer et zoomer sur la station en mode 3D (garde la perspective actuelle)
+    function centerOnStation3D(lat, lon) {
+      if (!globe3D || !globe3D.camera) return;
+      // Récupérer l'orientation actuelle de la caméra pour la conserver
+      const currentHeading = globe3D.camera.heading;
+      const currentPitch = globe3D.camera.pitch;
+      const currentRoll = globe3D.camera.roll;
+      
+      globe3D.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(lon, lat, 2000000),
+        orientation: {
+          heading: currentHeading,
+          pitch: currentPitch,
+          roll: currentRoll
+        },
+        duration: 1.5
+      });
+      console.log('[3D] Centré sur la station GP2:', lat, lon);
+    }
+
+    // Gestionnaire pour le bouton de recentrage
+    const btnCenterStation = document.getElementById('btn-center-station');
+    if (btnCenterStation) {
+      btnCenterStation.addEventListener('click', () => {
+        // Récupérer les coordonnées de la station depuis les données disponibles
+        let stationLat = null;
+        let stationLon = null;
+        
+        if (isGlobeMode && globe3D) {
+          // Mode 3D : utiliser les coordonnées stockées dans globe3D
+          if (globe3D.stationLat !== null && globe3D.stationLon !== null) {
+            stationLat = globe3D.stationLat;
+            stationLon = globe3D.stationLon;
+            centerOnStation3D(stationLat, stationLon);
+          } else if (globe3D.globalData && globe3D.globalData.station) {
+            stationLat = globe3D.globalData.station.lat;
+            stationLon = globe3D.globalData.station.lon;
+            centerOnStation3D(stationLat, stationLon);
+          }
+        } else {
+          // Mode 2D : utiliser les coordonnées depuis lastField ou forecastField
+          const data = lastField || forecastField;
+          if (data && data.station) {
+            stationLat = data.station.lat;
+            stationLon = data.station.lon;
+            centerOnStation2D(stationLat, stationLon);
+          } else if (stationMarker) {
+            // Fallback : utiliser la position du marqueur
+            const pos = stationMarker.getLatLng();
+            centerOnStation2D(pos.lat, pos.lng);
+          }
+        }
+        
+        if (!stationLat || !stationLon) {
+          console.warn('Impossible de centrer : coordonnées de la station non disponibles');
+        }
+      });
+    }
+
+    // =======================================================
+    // SYSTÈME DE POSITIONS FAVORITES
+    // =======================================================
+    let favorites = []; // Liste des positions favorites
+    let favoriteMarkers2D = []; // Marqueurs Leaflet pour mode 2D
+    let favoriteEntities3D = []; // Entités Cesium pour mode 3D
+    let currentFavoriteId = null; // ID de la position favorite actuellement affichée
+
+    // Charger les favorites depuis localStorage
+    function loadFavorites() {
+      try {
+        const stored = localStorage.getItem('windy_favorites');
+        if (stored) {
+          favorites = JSON.parse(stored);
+        } else {
+          favorites = [];
+        }
+      } catch (e) {
+        console.error('Erreur chargement favorites:', e);
+        favorites = [];
+      }
+      updateFavoritesDisplay();
+      updateFavoriteMarkers();
+    }
+
+    // Sauvegarder les favorites dans localStorage
+    function saveFavorites() {
+      try {
+        localStorage.setItem('windy_favorites', JSON.stringify(favorites));
+      } catch (e) {
+        console.error('Erreur sauvegarde favorites:', e);
+      }
+    }
+
+    // Vérifier si une position est dans la zone locale (pour mode 2D)
+    function isInLocalZone(lat, lon) {
+      if (!lastField && !forecastField) return false;
+      const data = lastField || forecastField;
+      if (!data || !data.grid) return false;
+      const grid = data.grid;
+      return lat >= grid.lat_min && lat <= grid.lat_max && 
+             lon >= grid.lon_min && lon <= grid.lon_max;
+    }
+
+    // Mettre à jour l'affichage de la liste des favorites
+    function updateFavoritesDisplay() {
+      const list = document.getElementById('favorites-list');
+      if (!list) return;
+
+      list.innerHTML = '';
+
+      if (favorites.length === 0) {
+        list.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 20px;">Aucune position favorite</div>';
+        return;
+      }
+
+      favorites.forEach((fav, index) => {
+        const item = document.createElement('div');
+        item.style.cssText = 'padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px; display: flex; flex-direction: column; gap: 8px;';
+        
+        const info = document.createElement('div');
+        info.style.cssText = 'flex: 1;';
+        info.innerHTML = `
+          <div style="font-weight: 600; color: #fff; margin-bottom: 3px; font-size: 13px;">${fav.name}</div>
+          <div style="font-size: 10px; color: var(--muted);">${fav.lat.toFixed(4)}°, ${fav.lon.toFixed(4)}°</div>
+        `;
+        
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display: flex; gap: 6px;';
+        
+        const btnView = document.createElement('button');
+        btnView.textContent = 'Voir';
+        btnView.style.cssText = 'flex: 1; padding: 5px 8px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;';
+        btnView.onclick = () => viewFavorite(fav.id);
+        
+        const btnEdit = document.createElement('button');
+        btnEdit.textContent = 'Modifier';
+        btnEdit.style.cssText = 'flex: 1; padding: 5px 8px; background: rgba(255,255,255,0.1); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;';
+        btnEdit.onclick = () => editFavorite(fav.id);
+        
+        const btnDelete = document.createElement('button');
+        btnDelete.textContent = 'Supprimer';
+        btnDelete.style.cssText = 'flex: 1; padding: 5px 8px; background: rgba(255,100,100,0.3); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;';
+        btnDelete.onclick = () => deleteFavorite(fav.id);
+        
+        actions.appendChild(btnView);
+        actions.appendChild(btnEdit);
+        actions.appendChild(btnDelete);
+        
+        item.appendChild(info);
+        item.appendChild(actions);
+        list.appendChild(item);
+      });
+    }
+
+    // Mettre à jour les marqueurs sur la carte/globe
+    function updateFavoriteMarkers() {
+      // Mode 2D : supprimer les anciens marqueurs
+      favoriteMarkers2D.forEach(marker => {
+        if (map && map.hasLayer(marker)) {
+          map.removeLayer(marker);
+        }
+      });
+      favoriteMarkers2D = [];
+
+      // Mode 3D : supprimer les anciennes entités
+      if (globe3D && globe3D.entities) {
+        favoriteEntities3D.forEach(entity => {
+          globe3D.entities.remove(entity);
+        });
+      }
+      favoriteEntities3D = [];
+
+      // Ajouter les marqueurs pour chaque favorite
+      favorites.forEach(fav => {
+        // Mode 2D : seulement si dans la zone locale
+        if (!isGlobeMode && isInLocalZone(fav.lat, fav.lon)) {
+          const marker = L.marker([fav.lat, fav.lon], {
+            title: fav.name,
+            icon: L.divIcon({
+              className: 'favorite-marker',
+              html: `<div style="background: #1E6B4F; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>`,
+              iconSize: [20, 20],
+              iconAnchor: [10, 10]
+            })
+          }).addTo(map);
+          
+          const popupContent = document.createElement('div');
+          popupContent.innerHTML = `<b>${fav.name}</b><br>${fav.lat.toFixed(4)}°, ${fav.lon.toFixed(4)}°`;
+          const btn = document.createElement('button');
+          btn.textContent = 'Voir données';
+          btn.style.cssText = 'margin-top: 5px; padding: 4px 8px; background: var(--accent); color: white; border: none; border-radius: 4px; cursor: pointer;';
+          btn.onclick = () => viewFavorite(fav.id);
+          popupContent.appendChild(btn);
+          marker.bindPopup(popupContent);
+          marker.on('click', () => {
+            viewFavorite(fav.id);
+          });
+          favoriteMarkers2D.push(marker);
+        }
+
+        // Mode 3D : toujours afficher
+        if (isGlobeMode && globe3D && globe3D.entities) {
+          const entity = globe3D.entities.add({
+            name: fav.name,
+            position: Cesium.Cartesian3.fromDegrees(fav.lon, fav.lat),
+            point: {
+              pixelSize: 10,
+              color: Cesium.Color.ORANGE,
+              outlineColor: Cesium.Color.WHITE,
+              outlineWidth: 2,
+              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY
+            },
+            label: {
+              text: fav.name,
+              font: '12pt sans-serif',
+              fillColor: Cesium.Color.WHITE,
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+              pixelOffset: new Cesium.Cartesian2(0, -25),
+              disableDepthTestDistance: Number.POSITIVE_INFINITY
+            }
+          });
+          
+          // Ajouter un gestionnaire de clic
+          entity.favoriteId = fav.id;
+          favoriteEntities3D.push(entity);
+        }
+      });
+    }
+
+    // Voir une position favorite (centrer, zoomer, afficher données)
+    // Rendre accessible globalement pour les popups
+    window.viewFavorite = function(id) {
+      const fav = favorites.find(f => f.id === id);
+      if (!fav) return;
+
+      // Centrer et zoomer
+      if (isGlobeMode && globe3D) {
+        centerOnStation3D(fav.lat, fav.lon);
+      } else {
+        if (isInLocalZone(fav.lat, fav.lon)) {
+          centerOnStation2D(fav.lat, fav.lon);
+        } else {
+          alert('Cette position n\'est pas dans la zone locale. Passez en mode globe 3D pour la voir.');
+          return;
+        }
+      }
+
+      // Fermer le modal de gestion
+      const modal = document.getElementById('favorites-modal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    };
+
+    // Charger les données météo pour une position favorite
+    async function loadFavoriteData(fav) {
+      try {
+        // Récupérer les données depuis l'API
+        const response = await fetch(`/api/forecast?hour=0&model=auto&lat=${fav.lat}&lon=${fav.lon}`);
+        if (!response.ok) throw new Error('Erreur API');
+
+        const data = await response.json();
+        
+        let temp = null, speed = null, dir = null, rh = null, pressure = null;
+        
+        // Interpoler les valeurs si on a des données de grille
+        if (data.grid && data.temp && data.u && data.v) {
+          temp = bilinearInterpGlobal(fav.lat, fav.lon, data.temp, data.grid);
+          const u = bilinearInterpGlobal(fav.lat, fav.lon, data.u, data.grid);
+          const v = bilinearInterpGlobal(fav.lat, fav.lon, data.v, data.grid);
+          rh = data.rh ? bilinearInterpGlobal(fav.lat, fav.lon, data.rh, data.grid) : null;
+          pressure = data.pressure ? bilinearInterpGlobal(fav.lat, fav.lon, data.pressure, data.grid) : null;
+
+          speed = Math.sqrt(u * u + v * v);
+          const dirRad = Math.atan2(-u, -v);
+          dir = (dirRad * 180 / Math.PI + 360) % 360;
+        } else {
+          // Fallback : utiliser les données directes si disponibles
+          if (data.temp && Array.isArray(data.temp) && data.temp.length > 0) {
+            temp = Array.isArray(data.temp[0]) ? data.temp[0][0] : data.temp[0];
+          }
+        }
+
+        return {
+          name: fav.name,
+          lat: fav.lat,
+          lon: fav.lon,
+          temp: temp,
+          speed: speed,
+          dir: dir,
+          rh: rh,
+          pressure: pressure
+        };
+      } catch (error) {
+        console.error('Erreur chargement données favorite:', error);
+        return {
+          name: fav.name,
+          lat: fav.lat,
+          lon: fav.lon,
+          temp: null,
+          speed: null,
+          dir: null,
+          rh: null,
+          pressure: null,
+          error: true
+        };
+      }
+    }
+
+    // Charger et afficher les données de toutes les positions favorites
+    async function loadAllFavoritesData() {
+      const list = document.getElementById('favorites-data-list');
+      if (!list) return;
+
+      list.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 20px;">Chargement des données...</div>';
+
+      if (favorites.length === 0) {
+        list.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 20px;">Aucune position favorite</div>';
+        return;
+      }
+
+      // Charger les données pour toutes les favorites en parallèle
+      const dataPromises = favorites.map(fav => loadFavoriteData(fav));
+      const allData = await Promise.all(dataPromises);
+
+      list.innerHTML = '';
+
+      allData.forEach((data, index) => {
+        const item = document.createElement('div');
+        item.style.cssText = 'padding: 10px; background: rgba(255,255,255,0.05); border-radius: 6px;';
+        
+        const name = document.createElement('h4');
+        name.style.cssText = 'margin: 0 0 8px; color: #fff; font-size: 14px; font-weight: 600;';
+        name.textContent = data.name;
+        item.appendChild(name);
+
+        const position = document.createElement('div');
+        position.style.cssText = 'margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed rgba(255,255,255,0.1);';
+        position.innerHTML = `<span style="color: var(--muted); font-size: 11px;">Position :</span> <span style="color: #fff; font-weight: 600; font-size: 11px; margin-left: 6px;">${data.lat.toFixed(4)}°, ${data.lon.toFixed(4)}°</span>`;
+        item.appendChild(position);
+
+        if (data.error) {
+          const error = document.createElement('div');
+          error.style.cssText = 'color: rgba(255,100,100,0.8); font-size: 11px; padding: 6px; background: rgba(255,100,100,0.1); border-radius: 4px;';
+          error.textContent = 'Erreur lors du chargement des données';
+          item.appendChild(error);
+        } else {
+          const dataGrid = document.createElement('div');
+          dataGrid.style.cssText = 'display: grid; grid-template-columns: 1fr 1fr; gap: 4px;';
+          
+          const fields = [
+            { label: 'Temp', value: data.temp !== null ? `${data.temp.toFixed(1)} °C` : '--', key: 'temp' },
+            { label: 'Vitesse', value: data.speed !== null ? `${data.speed.toFixed(2)} m/s` : '--', key: 'speed' },
+            { label: 'Direction', value: data.dir !== null ? `${data.dir.toFixed(0)}°` : '--', key: 'dir' },
+            { label: 'Humidité', value: data.rh !== null ? `${data.rh.toFixed(1)} %` : '--', key: 'rh' },
+            { label: 'Pression', value: data.pressure !== null ? `${data.pressure.toFixed(1)} hPa` : '--', key: 'pressure', colspan: 2 }
+          ];
+
+          fields.forEach(field => {
+            const fieldDiv = document.createElement('div');
+            if (field.colspan === 2) {
+              fieldDiv.style.cssText = 'grid-column: 1 / -1; display: flex; justify-content: space-between; padding: 4px 0; border-top: 1px dashed rgba(255,255,255,0.05);';
+            } else {
+              fieldDiv.style.cssText = 'display: flex; justify-content: space-between; padding: 4px 0;';
+            }
+            fieldDiv.innerHTML = `
+              <span style="color: var(--muted); font-size: 11px;">${field.label} :</span>
+              <span style="color: #fff; font-weight: 600; font-size: 11px;">${field.value}</span>
+            `;
+            dataGrid.appendChild(fieldDiv);
+          });
+
+          item.appendChild(dataGrid);
+        }
+
+        list.appendChild(item);
+      });
+    }
+
+    // Variables pour le mode de sélection de position
+    let isSelectingFavoritePosition = false;
+    let favoriteClickHandler2D = null;
+    let favoriteClickHandler3D = null;
+    let selectionMarker2D = null;
+    let selectionEntity3D = null;
+
+    // Ajouter une position favorite
+    function addFavorite() {
+      const form = document.getElementById('favorite-form');
+      const title = document.getElementById('favorite-form-title');
+      const nameInput = document.getElementById('favorite-name-input');
+      const latInput = document.getElementById('favorite-lat-input');
+      const lonInput = document.getElementById('favorite-lon-input');
+      const btnSelectOnMap = document.getElementById('btn-select-on-map');
+
+      if (form) {
+        form.style.display = 'block';
+        if (title) title.textContent = 'Ajouter une position';
+        if (nameInput) nameInput.value = '';
+        if (latInput) latInput.value = '';
+        if (lonInput) lonInput.value = '';
+        
+        // Ne pas activer automatiquement le mode de sélection
+        // L'utilisateur peut soit entrer manuellement, soit cliquer sur le bouton
+        stopFavoriteSelection();
+        
+        // Mettre à jour le texte du bouton
+        if (btnSelectOnMap) {
+          btnSelectOnMap.textContent = 'Sélectionner sur la carte';
+          btnSelectOnMap.style.background = 'rgba(0, 200, 255, 0.2)';
+          btnSelectOnMap.style.borderColor = 'rgba(0, 200, 255, 0.4)';
+        }
+      }
+    }
+
+    // Démarrer le mode de sélection de position
+    function startFavoriteSelection() {
+      isSelectingFavoritePosition = true;
+      const latInput = document.getElementById('favorite-lat-input');
+      const lonInput = document.getElementById('favorite-lon-input');
+      const selectHint = document.getElementById('favorite-select-hint');
+      const btnSelectOnMap = document.getElementById('btn-select-on-map');
+      
+      // Afficher le message d'aide
+      if (selectHint) {
+        selectHint.style.display = 'block';
+        selectHint.textContent = isGlobeMode 
+          ? 'Cliquez sur le globe pour sélectionner une position' 
+          : 'Cliquez sur la carte pour sélectionner une position';
+      }
+      
+      // Mettre à jour le bouton
+      if (btnSelectOnMap) {
+        btnSelectOnMap.textContent = 'Annuler la sélection';
+        btnSelectOnMap.style.background = 'rgba(255, 100, 100, 0.2)';
+        btnSelectOnMap.style.borderColor = 'rgba(255, 100, 100, 0.4)';
+        btnSelectOnMap.style.color = '#ff6464';
+      }
+      
+      // Mode 2D : écouter les clics sur la carte
+      if (!isGlobeMode && map) {
+        // Changer le curseur pour indiquer le mode de sélection
+        map.getContainer().style.cursor = 'crosshair';
+        
+        // Supprimer l'ancien handler s'il existe
+        if (favoriteClickHandler2D) {
+          map.off('click', favoriteClickHandler2D);
+        }
+        
+        // Créer un nouveau handler
+        favoriteClickHandler2D = (e) => {
+          if (!isSelectingFavoritePosition) return;
+          
+          const lat = e.latlng.lat;
+          const lon = e.latlng.lng;
+          
+          // Remplir les champs
+          if (latInput) latInput.value = lat.toFixed(5);
+          if (lonInput) lonInput.value = lon.toFixed(5);
+          
+          // Afficher un marqueur temporaire
+          if (selectionMarker2D) {
+            map.removeLayer(selectionMarker2D);
+          }
+          selectionMarker2D = L.marker([lat, lon], {
+            icon: L.divIcon({
+              className: 'selection-marker',
+              html: `<div style="background: #00ff00; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.5); animation: pulse 1s infinite;"></div>`,
+              iconSize: [24, 24],
+              iconAnchor: [12, 12]
+            })
+          }).addTo(map);
+          
+          // Masquer le message d'aide
+          if (selectHint) selectHint.style.display = 'none';
+          
+          // Restaurer le curseur
+          map.getContainer().style.cursor = '';
+          
+          // Désactiver le mode de sélection
+          stopFavoriteSelection();
+        };
+        
+        map.on('click', favoriteClickHandler2D);
+      }
+      
+      // Mode 3D : écouter les clics sur le globe
+      if (isGlobeMode && globe3D && globe3D.scene) {
+        // Supprimer l'ancien handler s'il existe
+        if (favoriteClickHandler3D) {
+          favoriteClickHandler3D.destroy();
+        }
+        
+        // Créer un nouveau handler
+        favoriteClickHandler3D = new Cesium.ScreenSpaceEventHandler(globe3D.scene.canvas);
+        
+        favoriteClickHandler3D.setInputAction((click) => {
+          if (!isSelectingFavoritePosition) return;
+          
+          // Raycasting pour obtenir la position sur le globe
+          const cartesian = globe3D.camera.pickEllipsoid(click.position, globe3D.scene.globe.ellipsoid);
+          
+          if (!cartesian) return;
+          
+          // Convertir en coordonnées géographiques
+          const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+          const lat = Cesium.Math.toDegrees(cartographic.latitude);
+          const lon = Cesium.Math.toDegrees(cartographic.longitude);
+          
+          // Remplir les champs
+          if (latInput) latInput.value = lat.toFixed(5);
+          if (lonInput) lonInput.value = lon.toFixed(5);
+          
+          // Afficher un marqueur temporaire
+          if (selectionEntity3D) {
+            globe3D.entities.remove(selectionEntity3D);
+          }
+          selectionEntity3D = globe3D.entities.add({
+            position: Cesium.Cartesian3.fromDegrees(lon, lat),
+            point: {
+              pixelSize: 15,
+              color: Cesium.Color.LIME,
+              outlineColor: Cesium.Color.WHITE,
+              outlineWidth: 3,
+              heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY
+            }
+          });
+          
+          // Masquer le message d'aide
+          if (selectHint) selectHint.style.display = 'none';
+          
+          // Désactiver le mode de sélection
+          stopFavoriteSelection();
+        }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      }
+    }
+
+    // Arrêter le mode de sélection
+    function stopFavoriteSelection() {
+      isSelectingFavoritePosition = false;
+      const selectHint = document.getElementById('favorite-select-hint');
+      const btnSelectOnMap = document.getElementById('btn-select-on-map');
+      
+      // Masquer le message d'aide
+      if (selectHint) selectHint.style.display = 'none';
+      
+      // Remettre le bouton à l'état initial
+      if (btnSelectOnMap) {
+        btnSelectOnMap.textContent = 'Sélectionner sur la carte';
+        btnSelectOnMap.style.background = 'rgba(0, 200, 255, 0.2)';
+        btnSelectOnMap.style.borderColor = 'rgba(0, 200, 255, 0.4)';
+        btnSelectOnMap.style.color = '#00c8ff';
+      }
+      
+      // Mode 2D : supprimer le handler et le marqueur
+      if (map && favoriteClickHandler2D) {
+        map.off('click', favoriteClickHandler2D);
+        favoriteClickHandler2D = null;
+        map.getContainer().style.cursor = '';
+      }
+      if (selectionMarker2D) {
+        map.removeLayer(selectionMarker2D);
+        selectionMarker2D = null;
+      }
+      
+      // Mode 3D : supprimer le handler et l'entité
+      if (favoriteClickHandler3D) {
+        favoriteClickHandler3D.destroy();
+        favoriteClickHandler3D = null;
+      }
+      if (selectionEntity3D && globe3D && globe3D.entities) {
+        globe3D.entities.remove(selectionEntity3D);
+        selectionEntity3D = null;
+      }
+    }
+
+    // Modifier une position favorite
+    function editFavorite(id) {
+      const fav = favorites.find(f => f.id === id);
+      if (!fav) return;
+
+      const form = document.getElementById('favorite-form');
+      const title = document.getElementById('favorite-form-title');
+      const nameInput = document.getElementById('favorite-name-input');
+      const latInput = document.getElementById('favorite-lat-input');
+      const lonInput = document.getElementById('favorite-lon-input');
+      const btnSelectOnMap = document.getElementById('btn-select-on-map');
+
+      if (form) {
+        form.style.display = 'block';
+        if (title) title.textContent = 'Modifier la position';
+        if (nameInput) nameInput.value = fav.name;
+        if (latInput) latInput.value = fav.lat.toFixed(5);
+        if (lonInput) lonInput.value = fav.lon.toFixed(5);
+        
+        // Stocker l'ID pour la sauvegarde
+        form.dataset.editId = id;
+        
+        // Ne pas activer automatiquement le mode de sélection
+        stopFavoriteSelection();
+        
+        // Mettre à jour le texte du bouton
+        if (btnSelectOnMap) {
+          btnSelectOnMap.textContent = 'Sélectionner sur la carte';
+          btnSelectOnMap.style.background = 'rgba(0, 200, 255, 0.2)';
+          btnSelectOnMap.style.borderColor = 'rgba(0, 200, 255, 0.4)';
+        }
+      }
+    }
+
+    // Supprimer une position favorite
+    function deleteFavorite(id) {
+      if (confirm('Supprimer cette position favorite ?')) {
+        favorites = favorites.filter(f => f.id !== id);
+        saveFavorites();
+        updateFavoritesDisplay();
+        updateFavoriteMarkers();
+        
+        // Si c'était la position actuellement affichée, réinitialiser
+        if (currentFavoriteId === id) {
+          currentFavoriteId = null;
+        }
+      }
+    }
+
+    // Gestionnaires d'événements pour le modal des favorites
+    const btnFavorites = document.getElementById('btn-favorites');
+    const favoritesModal = document.getElementById('favorites-modal');
+    const favoritesModalClose = document.getElementById('favorites-modal-close');
+    const btnAddFavorite = document.getElementById('btn-add-favorite');
+    const favoriteForm = document.getElementById('favorite-form');
+    const favoriteFormSave = document.getElementById('favorite-form-save');
+    const favoriteFormCancel = document.getElementById('favorite-form-cancel');
+
+    if (btnFavorites) {
+      btnFavorites.addEventListener('click', () => {
+        if (favoritesModal) {
+          favoritesModal.style.display = 'flex';
+          loadFavorites();
+        }
+      });
+    }
+
+    if (favoritesModalClose) {
+      favoritesModalClose.addEventListener('click', () => {
+        stopFavoriteSelection();
+        if (favoritesModal) favoritesModal.style.display = 'none';
+        if (favoriteForm) favoriteForm.style.display = 'none';
+      });
+    }
+
+    if (favoritesModal) {
+      // Ne pas fermer le modal en cliquant sur le fond car cela bloque les interactions avec la carte
+      // L'utilisateur peut fermer le modal avec le bouton X ou le bouton Annuler
+    }
+
+    if (btnAddFavorite) {
+      btnAddFavorite.addEventListener('click', addFavorite);
+    }
+
+    // Bouton pour activer/désactiver la sélection sur la carte
+    const btnSelectOnMap = document.getElementById('btn-select-on-map');
+    if (btnSelectOnMap) {
+      btnSelectOnMap.addEventListener('click', () => {
+        if (isSelectingFavoritePosition) {
+          // Désactiver le mode de sélection
+          stopFavoriteSelection();
+        } else {
+          // Activer le mode de sélection
+          startFavoriteSelection();
+        }
+      });
+    }
+
+    if (favoriteFormSave) {
+      favoriteFormSave.addEventListener('click', () => {
+        const nameInput = document.getElementById('favorite-name-input');
+        const latInput = document.getElementById('favorite-lat-input');
+        const lonInput = document.getElementById('favorite-lon-input');
+
+        const name = nameInput ? nameInput.value.trim() : '';
+        const lat = latInput ? parseFloat(latInput.value) : NaN;
+        const lon = lonInput ? parseFloat(lonInput.value) : NaN;
+
+        if (!name || isNaN(lat) || isNaN(lon)) {
+          alert('Veuillez remplir tous les champs correctement');
+          return;
+        }
+
+        if (lat < -90 || lat > 90 || lon < -180 || lon > 180) {
+          alert('Coordonnées invalides');
+          return;
+        }
+
+        const editId = favoriteForm ? favoriteForm.dataset.editId : null;
+        
+        if (editId) {
+          // Modifier
+          const fav = favorites.find(f => f.id === editId);
+          if (fav) {
+            fav.name = name;
+            fav.lat = lat;
+            fav.lon = lon;
+          }
+          if (favoriteForm) delete favoriteForm.dataset.editId;
+        } else {
+          // Ajouter
+          const newFav = {
+            id: Date.now().toString(),
+            name: name,
+            lat: lat,
+            lon: lon
+          };
+          favorites.push(newFav);
+        }
+
+        saveFavorites();
+        updateFavoritesDisplay();
+        updateFavoriteMarkers();
+        
+        if (favoriteForm) favoriteForm.style.display = 'none';
+      });
+    }
+
+    if (favoriteFormCancel) {
+      favoriteFormCancel.addEventListener('click', () => {
+        stopFavoriteSelection();
+        if (favoriteForm) {
+          favoriteForm.style.display = 'none';
+          delete favoriteForm.dataset.editId;
+        }
+      });
+    }
+
+    // Bouton pour afficher les données des favorites
+    const btnFavoritesData = document.getElementById('btn-favorites-data');
+    const favoritesDataModal = document.getElementById('favorites-data-modal');
+    const favoritesDataModalClose = document.getElementById('favorites-data-modal-close');
+
+    if (btnFavoritesData) {
+      btnFavoritesData.addEventListener('click', () => {
+        if (favoritesDataModal) {
+          favoritesDataModal.style.display = 'flex';
+          loadAllFavoritesData();
+        }
+      });
+    }
+
+    if (favoritesDataModalClose) {
+      favoritesDataModalClose.addEventListener('click', () => {
+        if (favoritesDataModal) {
+          favoritesDataModal.style.display = 'none';
+        }
+      });
+    }
+
+    if (favoritesDataModal) {
+      // Permettre la fermeture en cliquant sur le fond
+      favoritesDataModal.addEventListener('click', (e) => {
+        if (e.target === favoritesDataModal) {
+          favoritesDataModal.style.display = 'none';
+        }
+      });
+    }
+
+    // Gestionnaire de clic sur les entités favorites en mode 3D
+    if (globe3D && globe3D.entities) {
+      // Sera ajouté après l'initialisation du globe
+    }
+
+    // Charger les favorites au démarrage
+    loadFavorites();
+
+    btnGlobe.onclick = () => {
+      if (isGlobeMode) {
+        // Retour au mode 2D
+        switchTo2D();
+      } else {
+        // Passer au mode 3D
+        switchTo3D();
+      }
+    };
+
+    function switchTo3D() {
+      isGlobeMode = true;
+      setActiveButton('btn-globe');
+      
+      // Arrêter la sélection en mode 2D si active
+      if (isSelectingFavoritePosition && favoriteClickHandler2D) {
+        stopFavoriteSelection();
+        // Redémarrer en mode 3D
+        if (document.getElementById('favorite-form') && document.getElementById('favorite-form').style.display !== 'none') {
+          startFavoriteSelection();
+        }
+      }
+      
+      // Masquer la carte 2D
+      document.getElementById('map').style.display = 'none';
+      document.getElementById('wind-canvas').style.display = 'none';
+      
+      // Afficher le conteneur Cesium
+      const cesiumContainer = document.getElementById('cesiumContainer');
+      cesiumContainer.style.display = 'block';
+      
+      // Afficher le contrôle isobare
+      const isobarControl = document.getElementById('isobar-control');
+      if (isobarControl) {
+        isobarControl.style.display = 'block';
+      }
+      
+      // Mettre à jour les marqueurs favorites
+      updateFavoriteMarkers();
+      
+      // Initialiser le globe 3D si pas déjà fait
+      if (!globe3D) {
+        initGlobe3D();
+        // Attendre un peu que Cesium soit prêt
+        setTimeout(() => {
+          console.log('[Globe] Chargement initial des données...');
+          loadGlobalData();
+          // Démarrer la mise à jour automatique toutes les 10 minutes
+          startGlobeAutoUpdate();
+        }, 1000);
+      } else {
+        // Si les données sont déjà chargées, juste les afficher
+        if (globe3D.globalData) {
+          console.log('[Globe] Données déjà chargées, affichage...');
+          updateGlobeTexture();
+          // Redémarrer l'animation des particules si elle n'est pas en cours
+          if (!globe3D.animationRunning) {
+            console.log('[Globe] Redémarrage animation particules...');
+            updateGlobeParticles();
+          } else {
+            console.log('[Globe] Animation particules déjà en cours');
+          }
+          // Démarrer la mise à jour automatique si pas déjà démarrée
+          if (!globe3D.updateInterval) {
+            startGlobeAutoUpdate();
+          }
+        } else {
+          // Charger les données seulement si elles ne sont pas déjà chargées
+          console.log('[Globe] Chargement des données...');
+          loadGlobalData();
+          startGlobeAutoUpdate();
+        }
+      }
+    }
+    
+    // Fonction pour démarrer la mise à jour automatique toutes les 10 minutes
+    function startGlobeAutoUpdate() {
+      if (!globe3D) return;
+      
+      // Nettoyer l'intervalle existant s'il y en a un
+      if (globe3D.updateInterval) {
+        clearInterval(globe3D.updateInterval);
+      }
+      
+      // Mettre à jour toutes les 15 minutes (900000 ms) pour réduire la charge
+      globe3D.updateInterval = setInterval(() => {
+        if (isGlobeMode && globe3D) {
+          console.log('[Globe] Mise à jour automatique des données (toutes les 15 min)...');
+          loadGlobalData(true); // true = mise à jour en arrière-plan
+        } else {
+          // Si on n'est plus en mode globe, arrêter l'intervalle
+          if (globe3D.updateInterval) {
+            clearInterval(globe3D.updateInterval);
+            globe3D.updateInterval = null;
+          }
+        }
+      }, 900000); // 15 minutes = 900000 ms (au lieu de 10 minutes)
+      
+      console.log('[Globe] ✅ Mise à jour automatique démarrée (toutes les 10 minutes)');
+    }
+    
+    // Fonction pour arrêter la mise à jour automatique
+    function stopGlobeAutoUpdate() {
+      if (globe3D && globe3D.updateInterval) {
+        clearInterval(globe3D.updateInterval);
+        globe3D.updateInterval = null;
+        console.log('[Globe] Mise à jour automatique arrêtée');
+      }
+    }
+
+    function switchTo2D() {
+      isGlobeMode = false;
+      setActiveButton(selectedLayer === 'temp' ? 'btn-temp' : 'btn-rh');
+      
+      // Arrêter la sélection en mode 3D si active
+      if (isSelectingFavoritePosition && favoriteClickHandler3D) {
+        stopFavoriteSelection();
+        // Redémarrer en mode 2D
+        if (document.getElementById('favorite-form') && document.getElementById('favorite-form').style.display !== 'none') {
+          startFavoriteSelection();
+        }
+      }
+      
+      // Masquer le contrôle isobare
+      const isobarControl = document.getElementById('isobar-control');
+      if (isobarControl) {
+        isobarControl.style.display = 'none';
+      }
+      
+      // Mettre à jour les marqueurs favorites
+      updateFavoriteMarkers();
+      
+      // Arrêter la mise à jour automatique du globe
+      stopGlobeAutoUpdate();
+      
+      // Masquer l'indicateur de chargement du globe
+      const loadingIndicator = document.getElementById('globe-loading-indicator');
+      if (loadingIndicator) {
+        loadingIndicator.classList.remove('loading');
+      }
+      const loadingBar = document.getElementById('globe-loading-bar');
+      if (loadingBar) {
+        loadingBar.style.width = '0%';
+      }
+      
+      
+      // Masquer le globe 3D
+      document.getElementById('cesiumContainer').style.display = 'none';
+      
+      // Afficher la carte 2D
+      document.getElementById('map').style.display = 'block';
+      document.getElementById('wind-canvas').style.display = 'block';
+      
+      // Redessiner la couche 2D
+      drawLayer();
+    }
+
+    function initGlobe3D() {
+      if (typeof Cesium === 'undefined') {
+        alert('Erreur: CesiumJS non chargé');
+        return;
+      }
+
+      // Désactiver complètement Ion AVANT de créer le viewer
+      if (Cesium.Ion) {
+        Cesium.Ion.defaultAccessToken = '';
+        if (Cesium.Ion.defaultServer) {
+          Cesium.Ion.defaultServer = '';
+        }
+      }
+
+      const cesiumContainer = document.getElementById('cesiumContainer');
+      
+      // Créer le viewer Cesium SANS provider par défaut pour éviter Ion
+      globe3D = new Cesium.Viewer('cesiumContainer', {
+        timeline: false,
+        animation: false,
+        baseLayerPicker: false,
+        fullscreenButton: false,
+        vrButton: false,
+        geocoder: false,
+        homeButton: false,
+        infoBox: false,
+        sceneModePicker: false,
+        selectionIndicator: false,
+        navigationHelpButton: false,
+        terrainProvider: new Cesium.EllipsoidTerrainProvider(),
+        imageryProvider: false // CRUCIAL: Pas de provider par défaut (évite Ion)
+      });
+
+      // Supprimer TOUTES les couches par défaut immédiatement
+      if (globe3D.imageryLayers) {
+        globe3D.imageryLayers.removeAll();
+      }
+
+      // Ajouter carte Esri World Street Map (style Google Maps, sans frontières contestées)
+      try {
+        // Utiliser UrlTemplateImageryProvider pour Esri (compatible Cesium)
+        const esriProvider = new Cesium.UrlTemplateImageryProvider({
+          url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+          credit: '© Esri',
+          maximumLevel: 19
+        });
+        globe3D.imageryLayers.addImageryProvider(esriProvider);
+        console.log('✅ Carte Esri Street Map ajoutée');
+      } catch (error) {
+        console.error('❌ Erreur Esri:', error);
+        // Fallback: utiliser OpenStreetMap
+        try {
+          const osmProvider = new Cesium.OpenStreetMapImageryProvider({
+            url: 'https://a.tile.openstreetmap.org/',
+            credit: '© OpenStreetMap contributors'
+          });
+          globe3D.imageryLayers.addImageryProvider(osmProvider);
+          console.log('✅ Carte OSM ajoutée (fallback)');
+        } catch (fallbackError) {
+          console.error('❌ Erreur fallback:', fallbackError);
+        }
+      }
+
+      // Vue initiale : centrer sur la station GP2 (sera mis à jour quand les données arrivent)
+      // Coordonnées par défaut de la station GP2
+      const defaultStationLat = 32.23233;
+      const defaultStationLon = -9.25156;
+      globe3D.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(defaultStationLon, defaultStationLat, 500000)
+      });
+
+      // Variables pour le globe (basées sur Globe 3D/main.js)
+      globe3D.temperatureLayer = null;
+      globe3D.temperatureCanvas = null;
+      globe3D.temperatureCtx = null;
+      globe3D.particleCollection = null;
+      globe3D.particles = [];
+      globe3D.globalData = null;
+      globe3D.currentLayer = selectedLayer; // 'temp' ou 'rh'
+      globe3D.windEnabled = true;
+      globe3D.particleCount = 5000; // Réduit de 25000 à 5000 pour améliorer les performances
+      globe3D.windSpeed = 1.0;
+      globe3D.tempOpacity = 0.35; // Opacité réduite pour que la carte reste visible
+      globe3D.stationMarker = null; // Marqueur de la station GP2
+      globe3D.stationLat = null;
+      globe3D.stationLon = null;
+      globe3D.time = 0;
+      globe3D.animationRunning = false;
+      globe3D.updateInterval = null; // Intervalle de mise à jour automatique
+      globe3D.isobarsEnabled = false; // Lignes isobares désactivées par défaut
+      globe3D.isobarEntities = []; // Liste des entités isobares
+      globe3D.hasCenteredOnStation = false; // Flag pour centrer une seule fois au début
+
+      // Créer la collection de particules
+      globe3D.particleCollection = new Cesium.PointPrimitiveCollection();
+      globe3D.scene.primitives.add(globe3D.particleCollection);
+
+      // Générer les particules initiales
+      generateGlobeParticles(globe3D.particleCount);
+
+      // Ajouter le système de hover pour afficher les données au curseur
+      setupGlobeHover();
+
+      console.log('✅ Globe 3D initialisé');
+      
+      // Générer une texture de test pour vérifier que le rendu fonctionne
+      setTimeout(() => {
+        generateTestTexture();
+      }, 2000);
+    }
+    
+    // Fonction pour configurer le système de hover sur le globe 3D
+    function setupGlobeHover() {
+      if (!globe3D || !globe3D.scene || !globe3D.scene.canvas) {
+        console.warn('[Globe] Impossible de configurer le hover: scene ou canvas non disponible');
+        return;
+      }
+      
+      // Stocker le handler dans globe3D pour pouvoir le détruire si nécessaire
+      if (globe3D.hoverHandler) {
+        globe3D.hoverHandler.destroy();
+      }
+      
+      let hoverTimeout = null;
+      globe3D.hoverHandler = new Cesium.ScreenSpaceEventHandler(globe3D.scene.canvas);
+      
+      globe3D.hoverHandler.setInputAction((movement) => {
+        if (!isGlobeMode || !globe3D || !globe3D.globalData) {
+          if (hoverDiv) hoverDiv.style.display = 'none';
+          return;
+        }
+        
+        // Annuler le timeout précédent
+        if (hoverTimeout) {
+          clearTimeout(hoverTimeout);
+        }
+        
+        // Cacher temporairement
+        if (hoverDiv) hoverDiv.style.display = 'none';
+        
+        // Délai avant d'afficher (comme en mode 2D)
+        hoverTimeout = setTimeout(() => {
+          if (isGlobeMode && globe3D && globe3D.globalData) {
+            showGlobeHoverInfo(movement.endPosition);
+          }
+        }, 400);
+      }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+      
+      globe3D.hoverHandler.setInputAction(() => {
+        if (hoverDiv) hoverDiv.style.display = 'none';
+        if (hoverTimeout) {
+          clearTimeout(hoverTimeout);
+        }
+      }, Cesium.ScreenSpaceEventType.MOUSE_LEAVE);
+      
+      // Gestionnaire de clic pour les entités favorites
+      globe3D.hoverHandler.setInputAction((click) => {
+        if (!isGlobeMode || !globe3D || !globe3D.scene) return;
+        
+        const pickedObject = globe3D.scene.pick(click.position);
+        if (pickedObject && pickedObject.id && pickedObject.id.favoriteId) {
+          const favoriteId = pickedObject.id.favoriteId;
+          viewFavorite(favoriteId);
+        }
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      
+      console.log('[Globe] ✅ Système de hover configuré');
+    }
+    
+    // Fonction pour afficher les informations au survol sur le globe 3D
+    function showGlobeHoverInfo(screenPosition) {
+      if (!globe3D || !globe3D.globalData || !globe3D.scene || !hoverDiv) {
+        if (hoverDiv) hoverDiv.style.display = 'none';
+        return;
+      }
+      
+      // Raycasting pour obtenir la position sur le globe
+      const cartesian = globe3D.camera.pickEllipsoid(screenPosition, globe3D.scene.globe.ellipsoid);
+      
+      if (!cartesian) {
+        hoverDiv.style.display = 'none';
+        return;
+      }
+      
+      // Convertir en coordonnées géographiques
+      const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+      const lat = Cesium.Math.toDegrees(cartographic.latitude);
+      const lon = Cesium.Math.toDegrees(cartographic.longitude);
+      
+      // Récupérer les données
+      const data = globe3D.globalData;
+      const grid = data.grid;
+      const scalar = globe3D.currentLayer === 'temp' ? data.temp : data.rh;
+      const uField = data.u;
+      const vField = data.v;
+      
+      // Interpoler les valeurs
+      const Sval = bilinearInterpGlobal(lat, lon, scalar, grid);
+      const TempVal = data.temp ? bilinearInterpGlobal(lat, lon, data.temp, grid) : null;
+      const RHVal = data.rh ? bilinearInterpGlobal(lat, lon, data.rh, grid) : null;
+      const u = bilinearInterpGlobal(lat, lon, uField, grid);
+      const v = bilinearInterpGlobal(lat, lon, vField, grid);
+      
+      if (Sval === null || u === null || v === null) {
+        hoverDiv.style.display = 'none';
+        return;
+      }
+      
+      // Calculer vitesse et direction
+      const speed = Math.sqrt(u * u + v * v);
+      const dirRad = Math.atan2(-u, -v);
+      const dirDeg = (dirRad * 180 / Math.PI + 360) % 360;
+      
+      // Interpoler la pression si disponible
+      const PressureVal = data.pressure ? bilinearInterpGlobal(lat, lon, data.pressure, grid) : null;
+      
+      // Afficher les informations
+      hoverDiv.innerHTML =
+        `Lat : ${lat.toFixed(4)}<br>` +
+        `Lon : ${lon.toFixed(4)}<br>` +
+        `Vitesse : ${speed.toFixed(2)} m/s<br>` +
+        `Direction : ${dirDeg.toFixed(0)}°<br>` +
+        `Temp : ${TempVal !== null ? TempVal.toFixed(1) + ' °C' : '--'}<br>` +
+        `RH : ${RHVal !== null ? RHVal.toFixed(1) + ' %' : '--'}<br>` +
+        `Pression : ${PressureVal !== null ? PressureVal.toFixed(1) + ' hPa' : '--'}`;
+      
+      // Positionner la div près du curseur (coordonnées écran)
+      hoverDiv.style.left = (screenPosition.x + 15) + 'px';
+      hoverDiv.style.top = (screenPosition.y + 15) + 'px';
+      hoverDiv.style.display = 'block';
+    }
+    
+    // Fonction de test pour générer une texture simple et vérifier le rendu
+    function generateTestTexture() {
+      if (!globe3D || !globe3D.imageryLayers) return;
+      
+      console.log('[Globe] Génération texture de test...');
+      
+      const testCanvas = document.createElement('canvas');
+      testCanvas.width = 1024;
+      testCanvas.height = 512;
+      const testCtx = testCanvas.getContext('2d');
+      
+      // Créer un gradient simple (rouge à l'équateur, bleu aux pôles)
+      for (let y = 0; y < 512; y++) {
+        for (let x = 0; x < 1024; x++) {
+          const lat = (0.5 - y / 512) * 180;
+          const t = Math.abs(lat) / 90; // 0 à l'équateur, 1 aux pôles
+          
+          const r = Math.floor(255 * (1 - t));
+          const g = 0;
+          const b = Math.floor(255 * t);
+          
+          const idx = (y * 1024 + x) * 4;
+          testCtx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+          testCtx.fillRect(x, y, 1, 1);
+        }
+      }
+      
+      const testDataUrl = testCanvas.toDataURL('image/png');
+      
+      try {
+        const testProvider = new Cesium.SingleTileImageryProvider({
+          url: testDataUrl,
+          rectangle: Cesium.Rectangle.MAX_VALUE
+        });
+        const testLayer = globe3D.imageryLayers.addImageryProvider(testProvider);
+        testLayer.alpha = 0.6;
+        console.log('✅ Texture de test ajoutée - vous devriez voir un gradient rouge/bleu');
+        console.log('[Globe] Si vous voyez la texture de test, le problème vient des données. Sinon, c\'est le rendu.');
+        
+        // Retirer la texture de test après 5 secondes
+        setTimeout(() => {
+          if (globe3D.imageryLayers && testLayer) {
+            globe3D.imageryLayers.remove(testLayer);
+            console.log('[Globe] Texture de test retirée');
+          }
+        }, 5000);
+      } catch (error) {
+        console.error('[Globe] Erreur texture de test:', error);
+      }
+    }
+
+    // Fonction pour ajouter le marqueur de la station GP2
+    function addStationMarker(lat, lon, name) {
+      if (!globe3D || !globe3D.entities) {
+        console.warn('[Globe] Impossible d\'ajouter le marqueur: globe3D ou entities non disponible');
+        return;
+      }
+      
+      // Retirer l'ancien marqueur s'il existe
+      if (globe3D.stationMarker) {
+        globe3D.entities.remove(globe3D.stationMarker);
+        globe3D.stationMarker = null;
+      }
+      
+      // Créer le marqueur
+      try {
+        globe3D.stationMarker = globe3D.entities.add({
+          name: name || 'Station GP2',
+          position: Cesium.Cartesian3.fromDegrees(lon, lat),
+          point: {
+            pixelSize: 12,
+            color: Cesium.Color.YELLOW,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            disableDepthTestDistance: Number.POSITIVE_INFINITY
+          },
+          label: {
+            text: name || 'GP2',
+            font: '14pt sans-serif',
+            fillColor: Cesium.Color.WHITE,
+            outlineColor: Cesium.Color.BLACK,
+            outlineWidth: 2,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            pixelOffset: new Cesium.Cartesian2(0, -30),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY
+          }
+        });
+        
+        console.log('[Globe] ✅ Marqueur station GP2 ajouté à', lat, lon);
+      } catch (error) {
+        console.error('[Globe] Erreur lors de l\'ajout du marqueur:', error);
+      }
+    }
+
+    // Fonction pour générer les particules (basée sur Globe 3D/main.js)
+    // Avec plus de particules autour de la station GP2
+    function generateGlobeParticles(count) {
+      const safeCount = Math.max(1, Math.min(count, 10000));
+      const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+      const earthRadius = 6378137;
+      const altitude = 10000;
+      
+      // Nombre de particules supplémentaires autour de la station (20% du total)
+      const stationParticleCount = Math.floor(safeCount * 0.2);
+      const globalParticleCount = safeCount - stationParticleCount;
+
+      globe3D.particles = [];
+      
+      // Générer particules globales (distribution uniforme)
+      for (let i = 0; i < globalParticleCount; i++) {
+        const y = 1 - (i / Math.max(1, globalParticleCount - 1)) * 2;
+        const radius = Math.sqrt(Math.max(0, 1 - y * y));
+        const theta = goldenAngle * i;
+        const x = Math.cos(theta) * radius;
+        const z = Math.sin(theta) * radius;
+
+        const pos = new Cesium.Cartesian3(
+          x * (earthRadius + altitude),
+          y * (earthRadius + altitude),
+          z * (earthRadius + altitude)
+        );
+
+        globe3D.particles.push({
+          position: pos,
+          previousPos: pos.clone(),
+          age: Math.random() * 100,
+          maxAge: 100 + Math.random() * 50,
+          speed: 0.5 + Math.random() * 0.5,
+          velocity: new Cesium.Cartesian3(0, 0, 0)
+        });
+      }
+      
+      // Générer particules autour de la station GP2 (si coordonnées disponibles)
+      if (globe3D.stationLat !== null && globe3D.stationLon !== null) {
+        const stationCartesian = Cesium.Cartesian3.fromDegrees(globe3D.stationLon, globe3D.stationLat);
+        const stationRadius = earthRadius + altitude;
+        
+        // Rayon autour de la station (environ 500 km)
+        const stationAreaRadius = 500000; // mètres
+        
+        for (let i = 0; i < stationParticleCount; i++) {
+          // Générer position aléatoire dans un cercle autour de la station
+          const angle = Math.random() * Math.PI * 2;
+          const distance = Math.random() * stationAreaRadius;
+          
+          // Calculer position en coordonnées cartésiennes
+          const cartographic = Cesium.Cartographic.fromCartesian(stationCartesian);
+          const latRad = cartographic.latitude;
+          const lonRad = cartographic.longitude;
+          
+          // Déplacement en mètres (approximation locale)
+          const latOffset = distance * Math.cos(angle) / 111320; // ~111320 m par degré de latitude
+          const lonOffset = distance * Math.sin(angle) / (111320 * Math.cos(latRad));
+          
+          const newLat = latRad + latOffset;
+          const newLon = lonRad + lonOffset;
+          
+          const pos = Cesium.Cartesian3.fromDegrees(
+            Cesium.Math.toDegrees(newLon),
+            Cesium.Math.toDegrees(newLat),
+            altitude
+          );
+
+          globe3D.particles.push({
+            position: pos,
+            previousPos: pos.clone(),
+            age: Math.random() * 100,
+            maxAge: 100 + Math.random() * 50,
+            speed: 0.5 + Math.random() * 0.5,
+            velocity: new Cesium.Cartesian3(0, 0, 0)
+          });
+        }
+        
+        console.log('[Globe]', stationParticleCount, 'particules ajoutées autour de la station GP2');
+      }
+      
+      console.log('[Globe] Total particules générées:', globe3D.particles.length);
+    }
+
+    function loadGlobalData(backgroundUpdate = false) {
+      if (!globe3D || !isGlobeMode) return;
+
+      const hour = forecastMode ? (parseInt(timelineDaySlider.value, 10) || 0) * 24 + (parseInt(forecastSlider.value, 10) || 0) : 0;
+      const model = forecastMode ? (forecastModelSelect.value || 'auto') : 'auto';
+      
+      const url = `/api/forecast?hour=${hour}&model=${model}&global=true`;
+      
+      console.log('[Globe] Chargement données globales:', url);
+      if (backgroundUpdate) {
+        console.log('[Globe] Mise à jour en arrière-plan (les données actuelles restent affichées)...');
+      } else {
+        console.log('[Globe] Cela peut prendre 10-20 secondes (72 appels API)...');
+      }
+      
+      // Afficher l'indicateur de chargement en bas à gauche (toujours, même pour les mises à jour en arrière-plan)
+      const loadingIndicator = document.getElementById('globe-loading-indicator');
+      const loadingBar = document.getElementById('globe-loading-bar');
+      if (loadingIndicator) {
+        loadingIndicator.classList.add('loading');
+        const loadingText = loadingIndicator.querySelector('.loading-text');
+        if (loadingText) {
+          if (backgroundUpdate) {
+            loadingText.textContent = 'Mise à jour des données...';
+          } else {
+            loadingText.textContent = 'Chargement des données globales...';
+          }
+        }
+        // Réinitialiser la barre de progression
+        if (loadingBar) {
+          loadingBar.style.width = '0%';
+        }
+      }
+      
+      // Retirer l'ancien indicateur central s'il existe (pour compatibilité)
+      const oldLoadingMsg = document.getElementById('globe-loading');
+      if (oldLoadingMsg) oldLoadingMsg.remove();
+      
+      // Utiliser XMLHttpRequest avec progression simulée synchronisée à la fin
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        const timeoutId = setTimeout(() => {
+          xhr.abort();
+          reject(new Error('Timeout'));
+        }, 600000); // 10 minutes (600000 ms) pour permettre le chargement avec plus d'appels API
+        
+        // Progression simulée (plus rapide pour suivre le chargement réel)
+        const loadingBar = document.getElementById('globe-loading-bar');
+        let simulatedProgress = 0;
+        const startTime = Date.now();
+        const estimatedDuration = 180000; // Estimation : 3 minutes (pour correspondre au timeout)
+        
+        // Mettre à jour la progression simulée
+        const updateSimulatedProgress = () => {
+          if (loadingBar) {
+            const elapsed = Date.now() - startTime;
+            // Progression de 0% à 95% sur la durée estimée
+            // Utiliser une courbe d'accélération pour que ça aille plus vite au début
+            const progressRatio = Math.min(elapsed / estimatedDuration, 1);
+            // Courbe d'accélération : x^0.7 pour aller plus vite au début
+            simulatedProgress = Math.pow(progressRatio, 0.7) * 95;
+            loadingBar.style.width = simulatedProgress + '%';
+          }
+        };
+        
+        // Démarrer la simulation de progression
+        const progressInterval = setInterval(updateSimulatedProgress, 50); // Mise à jour toutes les 50ms pour plus de fluidité
+        
+        xhr.addEventListener('load', () => {
+          clearTimeout(timeoutId);
+          // Arrêter la simulation de progression
+          clearInterval(progressInterval);
+          
+          console.log('[Globe] Réponse reçue, status:', xhr.status);
+          
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              // Compléter la barre à 100% immédiatement (synchronisation avec la fin du chargement)
+              if (loadingBar) {
+                loadingBar.style.width = '100%';
+              }
+              // Attendre un court instant pour que l'utilisateur voie la barre à 100%
+              setTimeout(() => {
+                resolve(data);
+              }, 200);
+            } catch (e) {
+              // En cas d'erreur, masquer la barre
+              if (loadingBar) {
+                loadingBar.style.width = '0%';
+              }
+              reject(new Error('Erreur parsing JSON: ' + e.message));
+            }
+          } else {
+            // En cas d'erreur HTTP, masquer la barre
+            if (loadingBar) {
+              loadingBar.style.width = '0%';
+            }
+            reject(new Error('HTTP ' + xhr.status));
+          }
+        });
+        
+        xhr.addEventListener('error', () => {
+          clearTimeout(timeoutId);
+          // Arrêter la simulation de progression
+          clearInterval(progressInterval);
+          // Masquer la barre
+          if (loadingBar) {
+            loadingBar.style.width = '0%';
+          }
+          reject(new Error('Erreur réseau'));
+        });
+        
+        xhr.addEventListener('abort', () => {
+          clearTimeout(timeoutId);
+          // Arrêter la simulation de progression
+          clearInterval(progressInterval);
+          // Masquer la barre
+          if (loadingBar) {
+            loadingBar.style.width = '0%';
+          }
+          reject(new Error('Requête annulée (timeout)'));
+        });
+        
+        xhr.open('GET', url);
+        xhr.send();
+      }).then(data => {
+          // La barre est déjà à 100% grâce au suivi de progression
+          // Masquer l'indicateur après un court délai pour voir la barre complète
+          const loadingIndicator = document.getElementById('globe-loading-indicator');
+          const loadingBar = document.getElementById('globe-loading-bar');
+          
+          setTimeout(() => {
+            if (loadingIndicator) {
+              loadingIndicator.classList.remove('loading');
+            }
+            if (loadingBar) {
+              loadingBar.style.width = '0%';
+            }
+          }, 300);
+          
+          // Retirer l'ancien indicateur central s'il existe (pour compatibilité)
+          const loadingMsg = document.getElementById('globe-loading');
+          if (loadingMsg) loadingMsg.remove();
+          
+          console.log('[Globe] Données JSON parsées:', {
+            hasError: !!data.error,
+            hasTemp: !!data.temp,
+            hasRh: !!data.rh,
+            hasU: !!data.u,
+            hasV: !!data.v,
+            hasGrid: !!data.grid,
+            tempLength: data.temp ? data.temp.length : 0,
+            grid: data.grid
+          });
+          
+          if (data.error) {
+            console.error('Erreur données globales:', data);
+            // En mode arrière-plan, ne pas afficher d'alerte, juste logger
+            if (!backgroundUpdate) {
+              alert('Erreur lors du chargement des données: ' + (data.message || data.error));
+            }
+            return;
+          }
+          
+          if (!data.temp || !data.rh || !data.u || !data.v || !data.grid) {
+            console.error('[Globe] Données incomplètes:', data);
+            // En mode arrière-plan, ne pas afficher d'alerte
+            if (!backgroundUpdate) {
+              alert('Les données reçues sont incomplètes. Veuillez réessayer.');
+            }
+            return;
+          }
+          
+          // Vérifier si les données de pression sont disponibles
+          if (data.pressure) {
+            console.log('[Globe] Données de pression disponibles');
+          } else {
+            console.warn('[Globe] Pas de données de pression dans la réponse');
+          }
+          
+          // Mettre à jour les données (les anciennes restent affichées jusqu'à ce que les nouvelles soient prêtes)
+          globe3D.globalData = data;
+          // S'assurer que currentLayer est toujours défini et conservé
+          // Si selectedLayer est défini et valide, l'utiliser, sinon garder le layer actuel
+          if (selectedLayer && (selectedLayer === 'temp' || selectedLayer === 'rh')) {
+            globe3D.currentLayer = selectedLayer;
+          } else if (!globe3D.currentLayer) {
+            // Si currentLayer n'est pas défini, utiliser 'temp' par défaut
+            globe3D.currentLayer = 'temp';
+          }
+          // Sinon, on garde globe3D.currentLayer tel quel (conservation du layer actuel)
+          
+          console.log('[Globe] Layer actuel:', globe3D.currentLayer, 'selectedLayer:', selectedLayer);
+          
+          // Stocker les coordonnées de la station si disponibles
+          if (data.station) {
+            globe3D.stationLat = data.station.lat;
+            globe3D.stationLon = data.station.lon;
+            console.log('[Globe] Station GP2:', data.station.name, 'à', data.station.lat, data.station.lon);
+            // Ajouter le marqueur de la station
+            addStationMarker(data.station.lat, data.station.lon, data.station.name);
+            // Centrer et zoomer sur la station au premier chargement (garder la perspective actuelle)
+            if (!globe3D.hasCenteredOnStation) {
+              centerOnStation3D(data.station.lat, data.station.lon);
+              globe3D.hasCenteredOnStation = true;
+            }
+            // Régénérer les particules avec plus de densité autour de la station
+            globe3D.particles = [];
+            generateGlobeParticles(globe3D.particleCount);
+          } else {
+            console.warn('[Globe] Aucune donnée de station dans la réponse API');
+          }
+          
+          // Réinitialiser le système de hover maintenant que les données sont chargées
+          if (globe3D.scene && globe3D.scene.canvas) {
+            setupGlobeHover();
+          }
+          
+          // Mettre à jour les marqueurs favorites
+          updateFavoriteMarkers();
+          
+          console.log('[Globe] Mise à jour texture...');
+          updateGlobeTexture();
+          
+          // Mettre à jour les données des particules (l'animation continue avec les nouvelles données)
+          // Si l'animation n'est pas encore démarrée, la démarrer
+          if (!globe3D.animationRunning) {
+            console.log('[Globe] Démarrage animation particules...');
+            updateGlobeParticles();
+          } else {
+            // Si l'animation est déjà en cours, juste mettre à jour les références aux données
+            // L'animation continuera automatiquement avec les nouvelles données
+            console.log('[Globe] Mise à jour des données de particules (animation en cours)...');
+            if (globe3D.particleData) {
+              globe3D.particleData.uField = data.u;
+              globe3D.particleData.vField = data.v;
+              globe3D.particleData.grid = data.grid;
+            }
+          }
+          
+          if (backgroundUpdate) {
+            console.log('[Globe] ✅ Mise à jour automatique terminée');
+          }
+        })
+        .catch(err => {
+          // Masquer l'indicateur de chargement
+          const loadingIndicator = document.getElementById('globe-loading-indicator');
+          const loadingBar = document.getElementById('globe-loading-bar');
+          if (loadingIndicator) {
+            loadingIndicator.classList.remove('loading');
+          }
+          if (loadingBar) {
+            loadingBar.style.width = '0%';
+          }
+          
+          // Retirer l'ancien indicateur central s'il existe (pour compatibilité)
+          const loadingMsg = document.getElementById('globe-loading');
+          if (loadingMsg) loadingMsg.remove();
+          
+          console.error('[Globe] Erreur chargement données globales:', err);
+          // En mode arrière-plan, ne pas afficher d'alerte
+          if (!backgroundUpdate) {
+            if (err.name === 'AbortError') {
+              alert('Le chargement des données a pris trop de temps (timeout). Veuillez réessayer.');
+            } else {
+              alert('Erreur lors du chargement des données: ' + err.message);
+            }
+          }
+        });
+    }
+
+    function updateGlobeTexture() {
+      if (!globe3D || !globe3D.globalData) {
+        console.warn('[Globe] Pas de données globales pour générer la texture');
+        return;
+      }
+
+      // S'assurer que currentLayer est défini
+      if (!globe3D.currentLayer) {
+        globe3D.currentLayer = selectedLayer || 'temp';
+        console.log('[Globe] currentLayer initialisé à:', globe3D.currentLayer);
+      }
+
+      const data = globe3D.globalData;
+      // Utiliser le layer actuel (temp ou rh)
+      const layerToUse = globe3D.currentLayer || 'temp';
+      const field = layerToUse === 'temp' ? data.temp : data.rh;
+      const grid = data.grid;
+
+      if (!field || !grid) {
+        console.error('[Globe] Données manquantes:', { 
+          field: !!field, 
+          grid: !!grid, 
+          layer: layerToUse,
+          hasTemp: !!data.temp,
+          hasRh: !!data.rh
+        });
+        return;
+      }
+      
+      console.log('[Globe] Mise à jour texture pour layer:', layerToUse);
+
+      // Vérifier que field est un tableau 2D valide
+      if (!Array.isArray(field) || field.length === 0) {
+        console.error('[Globe] Field n\'est pas un tableau valide:', field);
+        return;
+      }
+
+      if (!Array.isArray(field[0]) || field[0].length === 0) {
+        console.error('[Globe] Field n\'est pas un tableau 2D valide:', field);
+        return;
+      }
+
+      console.log('[Globe] Génération texture:', {
+        layer: globe3D.currentLayer,
+        fieldSize: field.length + 'x' + (field[0] ? field[0].length : 0),
+        grid: grid,
+        expectedSize: grid.ny + 'x' + grid.nx,
+        sampleValues: {
+          first: field[0] ? field[0][0] : 'N/A',
+          middle: field[Math.floor(field.length/2)] ? field[Math.floor(field.length/2)][Math.floor(field[0].length/2)] : 'N/A',
+          last: field[field.length-1] ? field[field.length-1][field[0].length-1] : 'N/A'
+        }
+      });
+
+      // Vérifier que les dimensions correspondent
+      if (field.length !== grid.ny || field[0].length !== grid.nx) {
+        console.warn('[Globe] Dimensions mismatch:', {
+          field: field.length + 'x' + field[0].length,
+          grid: grid.ny + 'x' + grid.nx
+        });
+      }
+
+      // Calculer min/max pour normalisation
+      let min = Infinity, max = -Infinity;
+      let validCount = 0;
+      for (let i = 0; i < field.length; i++) {
+        for (let j = 0; j < field[i].length; j++) {
+          const val = field[i][j];
+          if (isFinite(val) && val !== null) {
+            min = Math.min(min, val);
+            max = Math.max(max, val);
+            validCount++;
+          }
+        }
+      }
+
+      if (validCount === 0) {
+        console.error('[Globe] Aucune valeur valide dans le champ');
+        return;
+      }
+
+      const range = max - min || 1;
+      console.log('[Globe] Min/Max:', min, max, 'Range:', range, 'Valid values:', validCount);
+
+      // Créer le canvas de texture
+      if (!globe3D.temperatureCanvas) {
+        globe3D.temperatureCanvas = document.createElement('canvas');
+        globe3D.temperatureCanvas.width = 1024;
+        globe3D.temperatureCanvas.height = 512;
+        globe3D.temperatureCtx = globe3D.temperatureCanvas.getContext('2d');
+      }
+
+      const width = globe3D.temperatureCanvas.width;
+      const height = globe3D.temperatureCanvas.height;
+      const imgData = globe3D.temperatureCtx.createImageData(width, height);
+      const dataArray = imgData.data;
+
+      let validPixels = 0;
+      let invalidPixels = 0;
+      
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const lon = (x / width - 0.5) * 360;
+          const lat = (0.5 - y / height) * 180;
+
+          // Interpoler valeur
+          const val = bilinearInterpGlobal(lat, lon, field, grid);
+          
+          let r, g, b;
+          if (val === null || !isFinite(val) || isNaN(val)) {
+            r = g = b = 0;
+            invalidPixels++;
+          } else {
+            validPixels++;
+            const tNorm = (val - min) / range;
+            if (globe3D.currentLayer === 'temp') {
+              // Palette température améliorée (plus contrastée)
+              if (tNorm < 0.2) {
+                const t = tNorm / 0.2;
+                r = 0; g = Math.floor(100 * t); b = Math.floor(200 + 55 * t);
+              } else if (tNorm < 0.4) {
+                const t = (tNorm - 0.2) / 0.2;
+                r = 0; g = Math.floor(100 + 155 * t); b = Math.floor(255 - 100 * t);
+              } else if (tNorm < 0.6) {
+                const t = (tNorm - 0.4) / 0.2;
+                r = Math.floor(255 * t); g = 255; b = Math.floor(155 - 155 * t);
+              } else if (tNorm < 0.8) {
+                const t = (tNorm - 0.6) / 0.2;
+                r = 255; g = Math.floor(255 - 100 * t); b = 0;
+              } else {
+                const t = (tNorm - 0.8) / 0.2;
+                r = 255; g = Math.floor(155 - 155 * t); b = Math.floor(50 * t);
+              }
+            } else {
+              // Palette humidité améliorée (plus contrastée)
+              if (tNorm < 0.33) {
+                const t = tNorm / 0.33;
+                r = Math.floor(20 * t); g = Math.floor(20 + 40 * t); b = Math.floor(150 + 105 * t);
+              } else if (tNorm < 0.66) {
+                const t = (tNorm - 0.33) / 0.33;
+                r = Math.floor(20 + 100 * t); g = Math.floor(60 + 100 * t); b = 255;
+              } else {
+                const t = (tNorm - 0.66) / 0.34;
+                r = Math.floor(120 + 135 * t); g = Math.floor(160 + 95 * t); b = 255;
+              }
+            }
+          }
+
+          const idx = (y * width + x) * 4;
+          dataArray[idx] = r;
+          dataArray[idx + 1] = g;
+          dataArray[idx + 2] = b;
+          // Opacité dans l'image (255 = opaque, mais on laisse Cesium gérer l'alpha de la couche)
+          dataArray[idx + 3] = 255; // Toujours opaque dans l'image, l'alpha de la couche contrôle la transparence
+        }
+      }
+
+      globe3D.temperatureCtx.putImageData(imgData, 0, 0);
+      const dataUrl = globe3D.temperatureCanvas.toDataURL('image/png');
+      
+      console.log('[Globe] Texture générée:', {
+        dataUrlLength: dataUrl.length,
+        validPixels: validPixels,
+        invalidPixels: invalidPixels,
+        validPercent: ((validPixels / (width * height)) * 100).toFixed(1) + '%'
+      });
+
+      // Mettre à jour la couche (méthode de Globe 3D/main.js)
+      updateGlobeTemperatureLayer(dataUrl);
+
+      // Mettre à jour la légende
+      const legendTitle = document.getElementById('legend-title');
+      const legendMin = document.getElementById('tmin');
+      const legendMax = document.getElementById('tmax');
+      
+      if (legendTitle) {
+        legendTitle.textContent = globe3D.currentLayer === 'temp' ? 'Température (°C)' : 'Humidité relative (%)';
+      }
+      if (legendMin) {
+        legendMin.textContent = globe3D.currentLayer === 'temp' ? `${min.toFixed(1)} °C` : `${min.toFixed(1)} %`;
+      }
+      if (legendMax) {
+        legendMax.textContent = globe3D.currentLayer === 'temp' ? `${max.toFixed(1)} °C` : `${max.toFixed(1)} %`;
+      }
+
+      console.log('✅ Texture globe mise à jour, min:', min, 'max:', max);
+    }
+
+    // Fonction pour calculer et dessiner les lignes isobares (version simplifiée et optimisée)
+    function updateIsobars() {
+      if (!globe3D || !globe3D.globalData || !globe3D.globalData.pressure) {
+        console.warn('[Globe] Pas de données de pression pour les isobares');
+        return;
+      }
+
+      console.log('[Globe] Début calcul isobares...');
+      
+      // Supprimer les anciennes lignes isobares
+      if (globe3D.isobarEntities) {
+        globe3D.isobarEntities.forEach(entity => {
+          globe3D.entities.remove(entity);
+        });
+      }
+      globe3D.isobarEntities = [];
+
+      const pressure = globe3D.globalData.pressure;
+      const grid = globe3D.globalData.grid;
+      
+      if (!pressure || !grid) return;
+
+      // Trouver la plage de pression
+      let minPressure = Infinity;
+      let maxPressure = -Infinity;
+      
+      for (let i = 0; i < pressure.length; i++) {
+        for (let j = 0; j < pressure[i].length; j++) {
+          const val = pressure[i][j];
+          if (val !== null && val !== undefined && !isNaN(val)) {
+            minPressure = Math.min(minPressure, val);
+            maxPressure = Math.max(maxPressure, val);
+          }
+        }
+      }
+
+      if (minPressure === Infinity || maxPressure === -Infinity) {
+        console.warn('[Globe] Aucune donnée de pression valide');
+        return;
+      }
+
+      // Calculer les niveaux isobares (tous les 20 hPa, arrondis)
+      const step = 20; // hPa - intervalle fixe pour réduire le nombre de lignes
+      const minLevel = Math.ceil(minPressure / step) * step;
+      const maxLevel = Math.floor(maxPressure / step) * step;
+      const levels = [];
+      
+      for (let level = minLevel; level <= maxLevel; level += step) {
+        levels.push(level);
+      }
+
+      console.log('[Globe] Calcul isobares:', {
+        min: minPressure.toFixed(1),
+        max: maxPressure.toFixed(1),
+        levels: levels.length,
+        range: `${minLevel}-${maxLevel}`
+      });
+
+      // Version simplifiée : créer des segments de ligne simples pour chaque cellule
+      // Cela évite les boucles infinies et les calculs complexes
+      const ny = grid.ny;
+      const nx = grid.nx;
+      const latMin = grid.lat_min;
+      const latMax = grid.lat_max;
+      const lonMin = grid.lon_min;
+      const lonMax = grid.lon_max;
+      
+      // Pour chaque niveau isobare
+      levels.forEach(level => {
+        const segments = [];
+        
+        // Parcourir toutes les cellules
+        for (let i = 0; i < ny - 1; i++) {
+          for (let j = 0; j < nx - 1; j++) {
+            const v00 = getValue(pressure, i, j);
+            const v10 = getValue(pressure, i + 1, j);
+            const v01 = getValue(pressure, i, j + 1);
+            const v11 = getValue(pressure, i + 1, j + 1);
+            
+            if (v00 === null || v10 === null || v01 === null || v11 === null) continue;
+            
+            // Vérifier si le contour passe par cette cellule
+            const above00 = v00 >= level;
+            const above10 = v10 >= level;
+            const above01 = v01 >= level;
+            const above11 = v11 >= level;
+            
+            // Si tous les coins sont du même côté, pas de contour
+            if (above00 === above10 && above10 === above01 && above01 === above11) continue;
+            
+            // Calculer les coordonnées des coins
+            const lat0 = latMin + (i / (ny - 1)) * (latMax - latMin);
+            const lat1 = latMin + ((i + 1) / (ny - 1)) * (latMax - latMin);
+            const lon0 = lonMin + (j / (nx - 1)) * (lonMax - lonMin);
+            const lon1 = lonMin + ((j + 1) / (nx - 1)) * (lonMax - lonMin);
+            
+            // Trouver les intersections avec les bords de la cellule
+            const points = [];
+            
+            // Bord gauche (i, j) -> (i+1, j)
+            if (above00 !== above10) {
+              const t = (level - v00) / (v10 - v00);
+              points.push({ lat: lat0 + t * (lat1 - lat0), lon: lon0 });
+            }
+            
+            // Bord droit (i, j+1) -> (i+1, j+1)
+            if (above01 !== above11) {
+              const t = (level - v01) / (v11 - v01);
+              points.push({ lat: lat0 + t * (lat1 - lat0), lon: lon1 });
+            }
+            
+            // Bord bas (i, j) -> (i, j+1)
+            if (above00 !== above01) {
+              const t = (level - v00) / (v01 - v00);
+              points.push({ lat: lat0, lon: lon0 + t * (lon1 - lon0) });
+            }
+            
+            // Bord haut (i+1, j) -> (i+1, j+1)
+            if (above10 !== above11) {
+              const t = (level - v10) / (v11 - v10);
+              points.push({ lat: lat1, lon: lon0 + t * (lon1 - lon0) });
+            }
+            
+            // Si on a 2 points, créer un segment
+            if (points.length === 2) {
+              segments.push(points);
+            }
+          }
+        }
+        
+        // Créer des polylines pour chaque segment (version simplifiée)
+        segments.forEach(segment => {
+          if (segment.length === 2) {
+            const positions = [
+              Cesium.Cartesian3.fromDegrees(segment[0].lon, segment[0].lat, 10000),
+              Cesium.Cartesian3.fromDegrees(segment[1].lon, segment[1].lat, 10000)
+            ];
+            
+            const entity = globe3D.entities.add({
+              polyline: {
+                positions: positions,
+                width: 1.5,
+                material: Cesium.Color.WHITE.withAlpha(0.6),
+                clampToGround: false,
+                arcType: Cesium.ArcType.GEODESIC
+              }
+            });
+            
+            globe3D.isobarEntities.push(entity);
+          }
+        });
+      });
+
+      console.log('[Globe] ✅ Lignes isobares créées:', globe3D.isobarEntities.length);
+    }
+
+    // Fonction pour obtenir une valeur de la grille (avec gestion des null)
+    function getValue(data, i, j) {
+      if (i < 0 || i >= data.length || j < 0 || j >= data[i].length) return null;
+      const val = data[i][j];
+      if (val === null || val === undefined || isNaN(val)) return null;
+      return val;
+    }
+
+    // Fonction pour mettre à jour la couche de température (basée sur Globe 3D/main.js)
+    function updateGlobeTemperatureLayer(dataUrl) {
+      if (!globe3D || !globe3D.imageryLayers) {
+        console.error('[Globe] Globe3D ou imageryLayers non disponible');
+        return;
+      }
+
+      try {
+        // Si la couche n'existe pas encore, la créer
+        if (!globe3D.temperatureLayer) {
+          console.log('[Globe] Création nouvelle couche température');
+          const provider = new Cesium.SingleTileImageryProvider({
+            url: dataUrl,
+            rectangle: Cesium.Rectangle.MAX_VALUE
+          });
+          // Ajouter la couche APRÈS la carte OSM pour qu'elle soit au-dessus
+          globe3D.temperatureLayer = globe3D.imageryLayers.addImageryProvider(provider);
+          globe3D.temperatureLayer.alpha = globe3D.tempOpacity || 0.35; // Opacité réduite
+          console.log('✅ Couche température créée, alpha:', globe3D.temperatureLayer.alpha);
+          console.log('[Globe] Nombre de couches:', globe3D.imageryLayers.length);
+          console.log('[Globe] Index couche température:', globe3D.imageryLayers.indexOf(globe3D.temperatureLayer));
+        } else {
+          // Mettre à jour la texture existante (méthode de Globe 3D/main.js)
+          console.log('[Globe] Mise à jour couche température existante');
+          const blob = dataURLtoBlob(dataUrl);
+          const blobUrl = URL.createObjectURL(blob);
+          
+          const layerIndex = globe3D.imageryLayers.indexOf(globe3D.temperatureLayer);
+          if (layerIndex >= 0) {
+            const oldProvider = globe3D.temperatureLayer.imageryProvider;
+            globe3D.imageryLayers.remove(globe3D.temperatureLayer, false);
+            
+            const newProvider = new Cesium.SingleTileImageryProvider({
+              url: blobUrl,
+              rectangle: Cesium.Rectangle.MAX_VALUE
+            });
+            globe3D.temperatureLayer = globe3D.imageryLayers.addImageryProvider(newProvider, layerIndex);
+            globe3D.temperatureLayer.alpha = globe3D.tempOpacity || 0.35;
+            console.log('✅ Couche température mise à jour, alpha:', globe3D.temperatureLayer.alpha);
+            
+            // Nettoyer l'ancien blob
+            setTimeout(() => {
+              if (oldProvider && oldProvider._url && oldProvider._url.startsWith('blob:')) {
+                URL.revokeObjectURL(oldProvider._url);
+              }
+              setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+            }, 100);
+          } else {
+            console.warn('[Globe] Couche température non trouvée dans imageryLayers');
+          }
+        }
+        
+        // Toujours mettre à jour l'opacité
+        if (globe3D.temperatureLayer) {
+          globe3D.temperatureLayer.alpha = globe3D.tempOpacity || 0.35; // Opacité réduite
+          console.log('[Globe] Opacité couche:', globe3D.temperatureLayer.alpha);
+          console.log('[Globe] Couche visible:', globe3D.temperatureLayer.show);
+          // S'assurer que la couche est visible
+          globe3D.temperatureLayer.show = true;
+        }
+        
+        // Forcer le rendu
+        if (globe3D.scene) {
+          globe3D.scene.requestRender();
+        }
+      } catch (error) {
+        console.error('❌ Erreur température:', error);
+      }
+    }
+
+    // Fonction utilitaire pour convertir dataURL en Blob (basée sur Globe 3D/main.js)
+    function dataURLtoBlob(dataurl) {
+      const arr = dataurl.split(',');
+      const mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      return new Blob([u8arr], { type: mime });
+    }
+
+    // Fonction pour calculer le vent depuis les données réelles u, v (adaptée de Globe 3D/main.js)
+    function computeWindFromData(cartesian, u, v) {
+      if (u === null || v === null || !isFinite(u) || !isFinite(v)) {
+        return new Cesium.Cartesian3(0, 0, 0);
+      }
+
+      const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+      
+      // Vecteurs tangents (basé sur Globe 3D/main.js)
+      const radial = Cesium.Cartesian3.normalize(cartesian, new Cesium.Cartesian3());
+      const north = new Cesium.Cartesian3(0, 0, 1);
+      
+      const ePhi = Cesium.Cartesian3.normalize(
+        Cesium.Cartesian3.cross(
+          Cesium.Cartesian3.cross(radial, north, new Cesium.Cartesian3()),
+          radial,
+          new Cesium.Cartesian3()
+        ),
+        new Cesium.Cartesian3()
+      );
+      
+      const eTheta = Cesium.Cartesian3.normalize(
+        Cesium.Cartesian3.cross(radial, ePhi, new Cesium.Cartesian3()),
+        new Cesium.Cartesian3()
+      );
+
+      // Convertir u, v (m/s) en vecteur vent cartésien
+      // u = vitesse vers l'Est, v = vitesse vers le Nord
+      const speedScale = 50000; // Facteur d'échelle pour la visualisation
+      const vPhi = u * speedScale;  // Composante Est
+      const vTheta = v * speedScale; // Composante Nord
+
+      const wind = new Cesium.Cartesian3();
+      Cesium.Cartesian3.multiplyByScalar(ePhi, vPhi, wind);
+      Cesium.Cartesian3.add(
+        wind,
+        Cesium.Cartesian3.multiplyByScalar(eTheta, vTheta, new Cesium.Cartesian3()),
+        wind
+      );
+
+      return wind;
+    }
+
+    function bilinearInterpGlobal(lat, lon, field, grid) {
+      // Gérer wrap longitude
+      while (lon < -180) lon += 360;
+      while (lon > 180) lon -= 360;
+      lat = Math.max(-90, Math.min(90, lat));
+
+      const ny = grid.ny;
+      const nx = grid.nx;
+
+      const ty = (lat - grid.lat_min) / (grid.lat_max - grid.lat_min);
+      const tx = (lon - grid.lon_min) / (grid.lon_max - grid.lon_min);
+
+      // Pour les données globales, on accepte les valeurs légèrement en dehors (à cause des arrondis)
+      if (ty < -0.01 || ty > 1.01 || tx < -0.01 || tx > 1.01) return null;
+
+      const y = Math.max(0, Math.min(ny - 1, ty * (ny - 1)));
+      const x = Math.max(0, Math.min(nx - 1, tx * (nx - 1)));
+
+      const i0 = Math.floor(y);
+      const j0 = Math.floor(x);
+      const i1 = Math.min(i0 + 1, ny - 1);
+      const j1 = Math.min(j0 + 1, nx - 1);
+
+      const sy = y - i0;
+      const sx = x - j0;
+
+      // Récupérer les valeurs avec gestion des NaN
+      const f00 = field[i0] && field[i0][j0] !== undefined ? field[i0][j0] : null;
+      const f10 = field[i0] && field[i0][j1] !== undefined ? field[i0][j1] : null;
+      const f01 = field[i1] && field[i1][j0] !== undefined ? field[i1][j0] : null;
+      const f11 = field[i1] && field[i1][j1] !== undefined ? field[i1][j1] : null;
+
+      // Vérifier si toutes les valeurs sont valides
+      const values = [f00, f10, f01, f11].filter(v => v !== null && isFinite(v) && !isNaN(v));
+      if (values.length === 0) return null;
+
+      // Si toutes les valeurs sont valides, interpolation bilinéaire normale
+      if (values.length === 4) {
+        const f0 = f00 * (1 - sx) + f10 * sx;
+        const f1 = f01 * (1 - sx) + f11 * sx;
+        return f0 * (1 - sy) + f1 * sy;
+      }
+
+      // Sinon, moyenne pondérée des valeurs valides
+      let sum = 0;
+      let weight = 0;
+      
+      if (f00 !== null && isFinite(f00) && !isNaN(f00)) {
+        const w = (1 - sx) * (1 - sy);
+        sum += f00 * w;
+        weight += w;
+      }
+      if (f10 !== null && isFinite(f10) && !isNaN(f10)) {
+        const w = sx * (1 - sy);
+        sum += f10 * w;
+        weight += w;
+      }
+      if (f01 !== null && isFinite(f01) && !isNaN(f01)) {
+        const w = (1 - sx) * sy;
+        sum += f01 * w;
+        weight += w;
+      }
+      if (f11 !== null && isFinite(f11) && !isNaN(f11)) {
+        const w = sx * sy;
+        sum += f11 * w;
+        weight += w;
+      }
+
+      return weight > 0 ? sum / weight : null;
+    }
+
+    function updateGlobeParticles() {
+      if (!globe3D || !globe3D.particleCollection) {
+        console.warn('[Globe] Conditions non remplies pour particules:', {
+          hasGlobe3D: !!globe3D,
+          hasParticleCollection: !!(globe3D && globe3D.particleCollection)
+        });
+        return;
+      }
+
+      // Utiliser les données existantes si disponibles, sinon utiliser des données par défaut
+      const data = globe3D.globalData;
+      let uField, vField, grid;
+      
+      if (data && data.u && data.v && data.grid) {
+        uField = data.u;
+        vField = data.v;
+        grid = data.grid;
+      } else {
+        // Si pas de données, on ne peut pas démarrer l'animation
+        if (!globe3D.animationRunning) {
+          console.warn('[Globe] Pas de données disponibles pour les particules, attente...');
+          return;
+        }
+        // Si l'animation est déjà en cours, elle continuera avec les anciennes données stockées
+        console.log('[Globe] Données en cours de chargement, utilisation des données précédentes');
+        return;
+      }
+      
+      console.log('[Globe] Mise à jour particules, données vent disponibles');
+
+      // Générer les particules
+      if (globe3D.particles.length === 0) {
+        const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+        const earthRadius = 6378137;
+        const altitude = 10000;
+
+        for (let i = 0; i < globe3D.particleCount; i++) {
+          const y = 1 - (i / Math.max(1, globe3D.particleCount - 1)) * 2;
+          const radius = Math.sqrt(Math.max(0, 1 - y * y));
+          const theta = goldenAngle * i;
+          const x = Math.cos(theta) * radius;
+          const z = Math.sin(theta) * radius;
+
+          const pos = new Cesium.Cartesian3(
+            x * (earthRadius + altitude),
+            y * (earthRadius + altitude),
+            z * (earthRadius + altitude)
+          );
+
+          globe3D.particles.push({
+            position: pos,
+            previousPos: pos.clone(),
+            age: Math.random() * 100,
+            maxAge: 100 + Math.random() * 50,
+            speed: 0.5 + Math.random() * 0.5,
+            velocity: new Cesium.Cartesian3(0, 0, 0)
+          });
+        }
+      }
+
+      // Stocker les références aux données dans globe3D pour que l'animation puisse y accéder
+      globe3D.particleData = {
+        uField: uField,
+        vField: vField,
+        grid: grid
+      };
+
+      // Animer les particules
+      if (!globe3D.animationRunning) {
+        console.log('[Globe] Démarrage animation particules');
+        globe3D.animationRunning = true;
+        let lastTime = performance.now();
+        let frameCount = 0;
+        function animate() {
+          if (!isGlobeMode || !globe3D) {
+            // Ne pas arrêter l'animation, juste la mettre en pause
+            // Elle redémarrera automatiquement quand on repasse en mode globe
+            // Continuer à appeler requestAnimationFrame pour pouvoir reprendre
+            requestAnimationFrame(animate);
+            return;
+          }
+          
+          frameCount++;
+          if (frameCount % 60 === 0) {
+            console.log('[Globe] Animation en cours, particules:', globe3D.particles.length);
+          }
+
+          const now = performance.now();
+          const dt = Math.min((now - lastTime) / 1000, 0.1);
+          lastTime = now;
+
+          // Nettoyer la collection
+          globe3D.particleCollection.removeAll();
+
+          const earthRadius = 6378137;
+          const altitude = 10000;
+
+          // Mettre à jour les références aux données si de nouvelles données sont disponibles
+          // Cela permet de continuer avec les anciennes données si les nouvelles ne sont pas encore prêtes
+          let currentUField, currentVField, currentGrid;
+          if (globe3D.globalData && globe3D.globalData.u && globe3D.globalData.v && globe3D.globalData.grid) {
+            currentUField = globe3D.globalData.u;
+            currentVField = globe3D.globalData.v;
+            currentGrid = globe3D.globalData.grid;
+            // Mettre à jour les données stockées
+            globe3D.particleData = {
+              uField: currentUField,
+              vField: currentVField,
+              grid: currentGrid
+            };
+          } else if (globe3D.particleData) {
+            // Utiliser les données stockées précédemment
+            currentUField = globe3D.particleData.uField;
+            currentVField = globe3D.particleData.vField;
+            currentGrid = globe3D.particleData.grid;
+          } else {
+            // Pas de données disponibles, continuer quand même (particules sans vent)
+            currentUField = null;
+            currentVField = null;
+            currentGrid = null;
+          }
+
+          // Redistribution périodique pour maintenir une distribution uniforme
+          // (toutes les 10 secondes, redistribuer 10% des particules)
+          const redistributionInterval = 10.0; // secondes
+          const redistributionRate = 0.1; // 10% des particules
+          if (frameCount % Math.floor(60 * redistributionInterval) === 0 && frameCount > 0) {
+            const numToRedistribute = Math.floor(globe3D.particles.length * redistributionRate);
+            const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+            for (let i = 0; i < numToRedistribute; i++) {
+              const randomIndex = Math.floor(Math.random() * globe3D.particles.length);
+              const particle = globe3D.particles[randomIndex];
+              
+              // Redistribuer uniformément sur la sphère
+              const y = Math.random() * 2 - 1;
+              const radius = Math.sqrt(Math.max(0, 1 - y * y));
+              const theta = Math.random() * Math.PI * 2;
+              const x = Math.cos(theta) * radius;
+              const z = Math.sin(theta) * radius;
+              
+              particle.position = new Cesium.Cartesian3(
+                x * (earthRadius + altitude),
+                y * (earthRadius + altitude),
+                z * (earthRadius + altitude)
+              );
+              particle.velocity = new Cesium.Cartesian3(0, 0, 0);
+              particle.age = 0;
+            }
+          }
+
+          globe3D.particles.forEach(particle => {
+            const cartographic = Cesium.Cartographic.fromCartesian(particle.position);
+            const lat = Cesium.Math.toDegrees(cartographic.latitude);
+            const lon = Cesium.Math.toDegrees(cartographic.longitude);
+
+            // Utiliser les données actuelles (ou les anciennes si nouvelles non disponibles)
+            const u = currentUField && currentGrid ? bilinearInterpGlobal(lat, lon, currentUField, currentGrid) : null;
+            const v = currentVField && currentGrid ? bilinearInterpGlobal(lat, lon, currentVField, currentGrid) : null;
+
+            if (u === null || v === null || !isFinite(u) || !isFinite(v) || isNaN(u) || isNaN(v)) {
+              // Si pas de données de vent, continuer avec la vélocité actuelle (mouvement inertiel)
+              // ou respawn si la vélocité est nulle
+              if (Cesium.Cartesian3.magnitude(particle.velocity) < 0.1) {
+                // Respawn uniformément sur la sphère
+                const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+                const randomIndex = Math.floor(Math.random() * 10000);
+                const y = 1 - (randomIndex / 10000) * 2;
+                const radius = Math.sqrt(Math.max(0, 1 - y * y));
+                const theta = goldenAngle * randomIndex;
+                const x = Math.cos(theta) * radius;
+                const z = Math.sin(theta) * radius;
+                particle.position = new Cesium.Cartesian3(
+                  x * (earthRadius + altitude),
+                  y * (earthRadius + altitude),
+                  z * (earthRadius + altitude)
+                );
+                particle.velocity = new Cesium.Cartesian3(0, 0, 0);
+                particle.age = 0;
+              } else {
+                // Continuer avec la vélocité actuelle (mouvement inertiel)
+                // Déplacer particule avec vélocité actuelle
+                const movement = Cesium.Cartesian3.multiplyByScalar(particle.velocity, dt, new Cesium.Cartesian3());
+                Cesium.Cartesian3.add(particle.position, movement, particle.position);
+                
+                // Reprojection sphérique
+                const targetDist = earthRadius + altitude;
+                Cesium.Cartesian3.multiplyByScalar(
+                  Cesium.Cartesian3.normalize(particle.position, new Cesium.Cartesian3()),
+                  targetDist,
+                  particle.position
+                );
+                
+                // Vieillissement
+                particle.age += dt;
+                if (particle.age > particle.maxAge) {
+                  // Respawn
+                  const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+                  const randomIndex = Math.floor(Math.random() * 10000);
+                  const y = 1 - (randomIndex / 10000) * 2;
+                  const radius = Math.sqrt(Math.max(0, 1 - y * y));
+                  const theta = goldenAngle * randomIndex;
+                  const x = Math.cos(theta) * radius;
+                  const z = Math.sin(theta) * radius;
+                  particle.position = new Cesium.Cartesian3(
+                    x * (earthRadius + altitude),
+                    y * (earthRadius + altitude),
+                    z * (earthRadius + altitude)
+                  );
+                  particle.velocity = new Cesium.Cartesian3(0, 0, 0);
+                  particle.age = 0;
+                  particle.maxAge = 100 + Math.random() * 50;
+                }
+                
+                // Rendre la particule
+                try {
+                  globe3D.particleCollection.add({
+                    position: particle.position,
+                    pixelSize: 2.5,
+                    color: Cesium.Color.CYAN.withAlpha(0.9),
+                    outlineColor: Cesium.Color.WHITE,
+                    outlineWidth: 1
+                  });
+                } catch (e) {
+                  // Ignorer les erreurs de rendu individuelles
+                }
+              }
+              return;
+            }
+
+            // Calculer vent depuis les données réelles u, v
+            const wind = computeWindFromData(particle.position, u, v);
+
+            // Calculer vélocité avec interpolation pour mouvement fluide (basé sur Globe 3D/main.js)
+            const targetVelocity = Cesium.Cartesian3.multiplyByScalar(
+              wind,
+              globe3D.windSpeed * particle.speed,
+              new Cesium.Cartesian3()
+            );
+            
+            // Interpolation de la vélocité pour mouvement plus fluide
+            Cesium.Cartesian3.lerp(particle.velocity, targetVelocity, 0.1, particle.velocity);
+
+            // Déplacer particule
+            const movement = Cesium.Cartesian3.multiplyByScalar(particle.velocity, dt, new Cesium.Cartesian3());
+            Cesium.Cartesian3.add(particle.position, movement, particle.position);
+
+            // Reprojection sphérique
+            const targetDist = earthRadius + altitude;
+            Cesium.Cartesian3.multiplyByScalar(
+              Cesium.Cartesian3.normalize(particle.position, new Cesium.Cartesian3()),
+              targetDist,
+              particle.position
+            );
+
+            // Vieillissement
+            particle.age += dt;
+            if (particle.age > particle.maxAge) {
+              // Respawn uniformément sur la sphère (distribution uniforme)
+              const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+              const randomIndex = Math.floor(Math.random() * 10000);
+              const y = 1 - (randomIndex / 10000) * 2;
+              const radius = Math.sqrt(Math.max(0, 1 - y * y));
+              const theta = goldenAngle * randomIndex;
+              const x = Math.cos(theta) * radius;
+              const z = Math.sin(theta) * radius;
+              particle.position = new Cesium.Cartesian3(
+                x * (earthRadius + altitude),
+                y * (earthRadius + altitude),
+                z * (earthRadius + altitude)
+              );
+              particle.velocity = new Cesium.Cartesian3(0, 0, 0);
+              particle.age = 0;
+              particle.maxAge = 100 + Math.random() * 50; // Nouveau maxAge
+            }
+
+            // Rendre la particule
+            try {
+              globe3D.particleCollection.add({
+                position: particle.position,
+                pixelSize: 2.5,
+                color: Cesium.Color.CYAN.withAlpha(0.9),
+                outlineColor: Cesium.Color.WHITE,
+                outlineWidth: 1
+              });
+            } catch (e) {
+              // Ignorer les erreurs de rendu individuelles
+            }
+          });
+          
+          if (frameCount === 1) {
+            console.log('[Globe] Première frame rendue, particules:', globe3D.particleCollection.length);
+          }
+
+          requestAnimationFrame(animate);
+        };
+        animate();
+      } else {
+        console.log('[Globe] Animation déjà en cours');
+      }
+    }
+
+    // =======================================================
+    // UTILITAIRES
+    // =======================================================
+    function npMin(mat) {
+      let m = +Infinity;
+      for (let i = 0; i < mat.length; i++) {
+        for (let j = 0; j < mat[i].length; j++) {
+          if (mat[i][j] < m) m = mat[i][j];
+        }
+      }
+      return m;
+    }
+    function npMax(mat) {
+      let m = -Infinity;
+      for (let i = 0; i < mat.length; i++) {
+        for (let j = 0; j < mat[i].length; j++) {
+          if (mat[i][j] > m) m = mat[i][j];
+        }
+      }
+      return m;
+    }
+
+    // Bilinéaire (lat, lon) -> valeur champ 2D
+    function bilinearInterp(lat, lon, field, grid) {
+      const ny = grid.ny, nx = grid.nx;
+      const ty = (lat - grid.lat_min) / (grid.lat_max - grid.lat_min);
+      const tx = (lon - grid.lon_min) / (grid.lon_max - grid.lon_min);
+      if (ty < 0 || ty > 1 || tx < 0 || tx > 1) return null;
+
+      const y = ty * (ny - 1);
+      const x = tx * (nx - 1);
+
+      const i0 = Math.floor(y), j0 = Math.floor(x);
+      const i1 = Math.min(i0 + 1, ny - 1), j1 = Math.min(j0 + 1, nx - 1);
+
+      const sy = y - i0, sx = x - j0;
+
+      const f00 = field[i0][j0], f10 = field[i0][j1];
+      const f01 = field[i1][j0], f11 = field[i1][j1];
+
+      const f0 = f00 * (1 - sx) + f10 * sx;
+      const f1 = f01 * (1 - sx) + f11 * sx;
+      return f0 * (1 - sy) + f1 * sy;
+    }
+
+    // Particules
+    function respawnParticle(p) {
+      p.lat = gridBounds.getSouth() + Math.random() * (gridBounds.getNorth() - gridBounds.getSouth());
+      p.lon = gridBounds.getWest() + Math.random() * (gridBounds.getEast() - gridBounds.getWest());
+      p.age = 0;
+    }
+    function resetParticles() {
+      if (!gridBounds) return;
+      particles.length = 0;
+      for (let i = 0; i < N_PARTICLES; i++) {
+        const p = { lat: 0, lon: 0, age: 0 };
+        respawnParticle(p);
+        particles.push(p);
+      }
+    }
+
+    // =======================================================
+    // DESSIN (champ scalaire + particules vent)
+    // =======================================================
+    function getActiveField() {
+      if (forecastMode && forecastField) return { data: forecastField, kind: 'forecast' };
+      if (lastField) return { data: lastField, kind: 'realtime' };
+      return { data: null, kind: null };
+    }
+
+    function drawLayer() {
+      // Ne pas dessiner en mode globe
+      if (isGlobeMode) return;
+      
+      const active = getActiveField();
+      if (!active.data || !gridBounds) return;
+
+      resizeCanvas();
+      const size = map.getSize();
+      
+      // Vérifier que la taille est valide avant de créer ImageData
+      if (!size || !size.x || !size.y || size.x <= 0 || size.y <= 0 || !isFinite(size.x) || !isFinite(size.y)) {
+        console.warn('Taille de canvas invalide, skip drawLayer');
+        return;
+      }
+      
+      ctx.clearRect(0, 0, size.x, size.y);
+
+      const grid = active.data.grid;
+      const scalar = (selectedLayer === 'temp') ? active.data.temp : active.data.rh;
+      const uField = active.data.u;
+      const vField = active.data.v;
+
+      // Scalar background
+      const S_min = npMin(scalar);
+      const S_max = npMax(scalar);
+
+      const imgData = ctx.createImageData(size.x, size.y);
+      const data = imgData.data;
+
+      for (let py = 0; py < size.y; py += 2) {
+        for (let px = 0; px < size.x; px += 2) {
+          const latlng = map.containerPointToLatLng([px, py]);
+          const val = bilinearInterp(latlng.lat, latlng.lng, scalar, grid);
+          if (val === null) continue;
+
+          const tNorm = (val - S_min) / (S_max - S_min + 1e-6);
+
+          let r, g, b;
+          if (selectedLayer === 'temp') {
+            // Palette température améliorée (plus contrastée)
+            if (tNorm < 0.2) { const t = tNorm / 0.2; r = 0; g = Math.floor(100 * t); b = Math.floor(200 + 55 * t); }
+            else if (tNorm < 0.4) { const t = (tNorm - 0.2) / 0.2; r = 0; g = Math.floor(100 + 155 * t); b = Math.floor(255 - 100 * t); }
+            else if (tNorm < 0.6) { const t = (tNorm - 0.4) / 0.2; r = Math.floor(255 * t); g = 255; b = Math.floor(155 - 155 * t); }
+            else if (tNorm < 0.8) { const t = (tNorm - 0.6) / 0.2; r = 255; g = Math.floor(255 - 100 * t); b = 0; }
+            else { const t = (tNorm - 0.8) / 0.2; r = 255; g = Math.floor(155 - 155 * t); b = Math.floor(50 * t); }
+          } else {
+            // Palette humidité améliorée (plus contrastée)
+            if (tNorm < 0.33) { const t = tNorm / 0.33; r = Math.floor(20 * t); g = Math.floor(20 + 40 * t); b = Math.floor(150 + 105 * t); }
+            else if (tNorm < 0.66) { const t = (tNorm - 0.33) / 0.33; r = Math.floor(20 + 100 * t); g = Math.floor(60 + 100 * t); b = 255; }
+            else { const t = (tNorm - 0.66) / 0.34; r = Math.floor(120 + 135 * t); g = Math.floor(160 + 95 * t); b = 255; }
+          }
+
+          const idx = 4 * (py * size.x + px);
+          // Augmenter la saturation et le contraste
+          const saturation = 1.3;
+          const brightness = 1.1;
+          r = Math.min(255, Math.floor(r * saturation * brightness));
+          g = Math.min(255, Math.floor(g * saturation * brightness));
+          b = Math.min(255, Math.floor(b * saturation * brightness));
+          data[idx] = r; data[idx + 1] = g; data[idx + 2] = b; data[idx + 3] = 220;
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+
+      // Légende
+      document.getElementById('tmin').textContent = (selectedLayer === 'temp') ? (S_min.toFixed(1) + ' °C') : (S_min.toFixed(1) + ' %');
+      document.getElementById('tmax').textContent = (selectedLayer === 'temp') ? (S_max.toFixed(1) + ' °C') : (S_max.toFixed(1) + ' %');
+
+      // Particules vent
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = 'rgba(255,255,255,1.0)';
+      ctx.shadowBlur = 3;
+      ctx.shadowColor = 'rgba(255,255,255,0.8)';
+      const maxAge = 250, speedScale = 0.03;
+
+      particles.forEach(p => {
+        const latlng = L.latLng(p.lat, p.lon);
+        let pt = map.latLngToContainerPoint(latlng);
+        const u = bilinearInterp(p.lat, p.lon, uField, grid);
+        const v = bilinearInterp(p.lat, p.lon, vField, grid);
+        if (u === null || v === null) { respawnParticle(p); return; }
+
+        const speed = Math.sqrt(u*u + v*v);
+        if (!isFinite(speed) || speed < 0.1) { respawnParticle(p); return; }
+
+        const dLon = u * speedScale * 0.02;
+        const dLat = v * speedScale * 0.02;
+
+        let newLat = p.lat + dLat;
+        let newLon = p.lon + dLon;
+
+        p.age += 1;
+        let respawned = false;
+        if (p.age > maxAge || !gridBounds.contains([newLat, newLon])) {
+          respawnParticle(p); respawned = true;
+        } else {
+          p.lat = newLat; p.lon = newLon;
+        }
+
+        if (!respawned) {
+          const newPt = map.latLngToContainerPoint(L.latLng(p.lat, p.lon));
+          ctx.beginPath(); ctx.moveTo(pt.x, pt.y); ctx.lineTo(newPt.x, newPt.y); ctx.stroke();
+        }
+      });
+    }
+
+    // =======================================================
+    // BULLE INFO (survol)
+    // =======================================================
+    function showHoverInfo() {
+      const active = getActiveField();
+      if (!active.data || !lastMouse || !gridBounds) return;
+
+      const grid = active.data.grid;
+      const scalar = (selectedLayer === 'temp') ? active.data.temp : active.data.rh;
+      const uField = active.data.u, vField = active.data.v;
+
+      const lat = lastMouse.latlng.lat, lon = lastMouse.latlng.lng;
+      const Sval = bilinearInterp(lat, lon, scalar, grid);
+      const TempVal = active.data.temp ? bilinearInterp(lat, lon, active.data.temp, grid) : null;
+      const RHVal = active.data.rh ? bilinearInterp(lat, lon, active.data.rh, grid) : null;
+      const u = bilinearInterp(lat, lon, uField, grid);
+      const v = bilinearInterp(lat, lon, vField, grid);
+
+      if (Sval === null || u === null || v === null) { hoverDiv.style.display = 'none'; return; }
+
+      const speed = Math.sqrt(u*u + v*v);
+      const dirRad = Math.atan2(-u, -v);
+      const dirDeg = (dirRad * 180 / Math.PI + 360) % 360;
+
+      hoverDiv.innerHTML =
+        `Lat : ${lat.toFixed(4)}<br>` +
+        `Lon : ${lon.toFixed(4)}<br>` +
+        `Vitesse : ${speed.toFixed(2)} m/s<br>` +
+        `Direction : ${dirDeg.toFixed(0)}°<br>` +
+        `Temp : ${TempVal !== null ? TempVal.toFixed(1)+' °C' : '--'}<br>` +
+        `RH : ${RHVal !== null ? RHVal.toFixed(1)+' %' : '--'}`;
+
+      hoverDiv.style.left = (lastMouse.point.x + 15) + "px";
+      hoverDiv.style.top = (lastMouse.point.y + 15) + "px";
+      hoverDiv.style.display = 'block';
+    }
+
+    map.on('mousemove', (e) => {
+      if (!lastField && !forecastField) return;
+      if (hoverTimeout) clearTimeout(hoverTimeout);
+      const pt = map.latLngToContainerPoint(e.latlng);
+      lastMouse = { latlng: e.latlng, point: pt };
+      hoverDiv.style.display = 'none';
+      hoverTimeout = setTimeout(showHoverInfo, 400);
+    });
+
+    map.on('mouseout', () => {
+      hoverDiv.style.display = 'none';
+      lastMouse = null;
+      if (hoverTimeout) clearTimeout(hoverTimeout);
+    });
+
+    // =======================================================
+    // FETCH TEMPS RÉEL
+    // =======================================================
+    let currentDataDir = null;  // Variable pour stocker le data_dir actuel
+    
+    // Fonction pour récupérer le data_dir depuis l'API
+    async function getCurrentDataDir() {
+      try {
+        const resp = await fetch('/api/data-dir');
+        const data = await resp.json();
+        if (data.status === 'ok') {
+          // Ne pas utiliser "data" car c'est le dossier par défaut
+          if (data.data_dir && data.data_dir.trim() !== '' && data.data_dir.trim().toLowerCase() !== 'data') {
+            currentDataDir = data.data_dir;
+          } else {
+            currentDataDir = null;
+          }
+        }
+      } catch (error) {
+        console.error('Erreur lors de la récupération du data_dir:', error);
+        currentDataDir = null;
+      }
+    }
+    
+    // Récupérer le data_dir au chargement et toutes les 5 secondes
+    getCurrentDataDir();
+    setInterval(getCurrentDataDir, 5000);
+    
+    async function fetchFieldsAndUpdate() {
+      try {
+        // Construire l'URL avec le paramètre data_dir si disponible
+        let url = '/api/fields';
+        if (currentDataDir) {
+          url += `?data_dir=${encodeURIComponent(currentDataDir)}`;
+        }
+        
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          console.error('Erreur fetch fields: HTTP', resp.status);
+          const errorData = await resp.json().catch(() => ({}));
+          console.error('Détails erreur:', errorData);
+          return; // Arrêter ici si erreur
+        }
+        
+        const data = await resp.json();
+        
+        // Vérifier que la réponse contient les données attendues
+        if (!data || !data.grid) {
+          console.error('Erreur fetch fields: données invalides', data);
+          if (data.error) {
+            console.error('Erreur serveur:', data.error);
+          }
+          return; // Arrêter ici si données invalides
+        }
+        
+        lastField = data;
+
+        const grid = data.grid;
+        gridBounds = L.latLngBounds(
+          L.latLng(grid.lat_min, grid.lon_min),
+          L.latLng(grid.lat_max, grid.lon_max)
+        );
+
+        // Station GP2
+        if (!stationMarker) {
+          stationMarker = L.marker([data.station.lat, data.station.lon], { title: data.station.name }).addTo(map);
+          stationMarker.bindPopup(`${data.station.name}<br>${data.station_timestamp}`);
+          // Centrer et zoomer sur la station au premier chargement
+          centerOnStation2D(data.station.lat, data.station.lon);
+        } else {
+          stationMarker.setLatLng([data.station.lat, data.station.lon]);
+        }
+
+        // Vérifier que les données de station sont présentes
+        if (!data.station || !data.station_data) {
+          console.error('Erreur fetch fields: données station manquantes', data);
+          return; // Arrêter ici si données station manquantes
+        }
+        
+        // Panneau station
+        const st = data.station, sd = data.station_data;
+        document.getElementById('st-name').textContent = st.name;
+        document.getElementById('st-time').textContent = new Date(data.station_timestamp).toLocaleString();
+        document.getElementById('st-temp').textContent = `${sd.air_temp_c.toFixed(1)} °C`;
+        document.getElementById('st-speed').textContent = `${sd.speed_ms.toFixed(2)} m/s (${(sd.speed_ms*3.6).toFixed(1)} km/h)`;
+        document.getElementById('st-dir').textContent = `${sd.dir_deg.toFixed(0)}°`;
+        document.getElementById('st-rh').textContent = `${sd.rh.toFixed(1)} %`;
+
+        // Mettre à jour les marqueurs favorites
+        updateFavoriteMarkers();
+        
+        if (!forecastMode) { resetParticles(); drawLayer(); }
+      } catch (err) {
+        console.error('Erreur fetch fields:', err);
+      }
+    }
+
+    // 1er chargement + refresh
+    let fieldsUpdateInterval = null;
+    let isChatbotActive = false; // Flag pour indiquer si le chatbot est en train de traiter une requête
+    
+    function startFieldsUpdate() {
+      // Arrêter l'intervalle existant s'il y en a un
+      if (fieldsUpdateInterval) {
+        clearInterval(fieldsUpdateInterval);
+      }
+      
+      // Démarrer la mise à jour automatique seulement si le chatbot n'est pas actif
+      // Intervalle augmenté à 2 minutes pour réduire la charge
+      fieldsUpdateInterval = setInterval(() => {
+        if (!forecastMode && !isChatbotActive) {
+          fetchFieldsAndUpdate();
+        }
+      }, 120000); // 2 minutes au lieu de 1 minute
+    }
+    
+    function stopFieldsUpdate() {
+      if (fieldsUpdateInterval) {
+        clearInterval(fieldsUpdateInterval);
+        fieldsUpdateInterval = null;
+      }
+    }
+    
+    // Démarrer la mise à jour automatique
+    fetchFieldsAndUpdate();
+    startFieldsUpdate();
+
+    // Redessiner après zoom/pan
+    map.on('moveend zoomend', () => {
+      if (!isGlobeMode) {
+      drawLayer();
+      }
+    });
+
+    // =======================================================
+    // BOUCLE D'ANIMATION
+    // =======================================================
+    function animate() {
+      // Ne dessiner que si on n'est pas en mode globe
+      if (!isGlobeMode) {
+      drawLayer();
+      }
+      requestAnimationFrame(animate);
+    }
+    animate();
+
+    // =======================================================
+    // PRÉVISIONS
+    // =======================================================
+    const forecastPanel = document.getElementById('forecast-panel');
+    const forecastSlider = document.getElementById('forecast-slider');
+    const forecastHourLabel = document.getElementById('forecast-hour');
+    const forecastCloseBtn = document.getElementById('forecast-close');
+    const forecastModelSelect = document.getElementById('forecast-model');
+    
+    // Timeline en bas
+    const forecastTimeline = document.getElementById('forecast-timeline');
+    const timelineDaySlider = document.getElementById('timeline-day-slider');
+    const timelinePlayBtn = document.getElementById('timeline-play-btn');
+    const timelineCurrentTime = document.getElementById('timeline-current-time');
+    const timelineLabels = document.getElementById('timeline-labels');
+    let timelinePlaying = false;
+    let timelineInterval = null;
+
+    // Fonction pour obtenir les noms de jours
+    function getDayName(dayOffset) {
+      const days = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];
+      const today = new Date();
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + dayOffset);
+      const dayName = days[targetDate.getDay()];
+      const dayNum = targetDate.getDate();
+      if (dayOffset === 0) return 'Aujourd\'hui';
+      if (dayOffset === 1) return 'Demain';
+      return `${dayName} ${dayNum}`;
+    }
+
+    // Fonction pour formater l'heure
+    function formatHour(hour) {
+      return String(hour).padStart(2, '0') + ':00';
+    }
+
+    // Fonction pour calculer l'heure totale (en heures depuis maintenant)
+    function getTotalHours(day, hour) {
+      return day * 24 + hour;
+    }
+
+    // Fonction pour mettre à jour les labels de la timeline
+    function updateTimelineLabels() {
+      timelineLabels.innerHTML = '';
+      for (let i = 0; i <= 6; i++) {
+        const label = document.createElement('div');
+        label.textContent = getDayName(i);
+        label.style.position = 'absolute';
+        label.style.left = `${(i / 6) * 100}%`;
+        label.style.transform = 'translateX(-50%)';
+        timelineLabels.appendChild(label);
+      }
+    }
+
+    // Fonction pour mettre à jour l'affichage du temps actuel
+    function updateTimelineDisplay() {
+      const day = parseInt(timelineDaySlider.value, 10) || 0;
+      const hour = parseInt(forecastSlider.value, 10) || 0;
+      const dayName = getDayName(day);
+      timelineCurrentTime.textContent = `${dayName} - ${formatHour(hour)}`;
+      forecastHourLabel.textContent = formatHour(hour);
+    }
+
+    async function fetchForecastAtHour(day, hour, model = null) {
+      try {
+        // Utiliser le modèle sélectionné ou celui passé en paramètre
+        const selectedModel = model || forecastModelSelect.value || 'auto';
+        const totalHours = getTotalHours(day, hour);
+        
+        if (isGlobeMode) {
+          // Mode globe : utiliser loadGlobalData pour avoir l'indicateur de chargement
+          // loadGlobalData va utiliser les valeurs actuelles de timelineDaySlider et forecastSlider
+          // donc on doit s'assurer qu'elles sont à jour
+          if (globe3D) {
+            loadGlobalData(true); // true = mise à jour en arrière-plan
+          }
+        } else {
+          // Mode 2D : charger données locales
+        const resp = await fetch(`/api/forecast?hour=${totalHours}&model=${selectedModel}`);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        forecastField = data;
+
+        if (!gridBounds && data.grid) {
+          gridBounds = L.latLngBounds(
+            L.latLng(data.grid.lat_min, data.grid.lon_min),
+            L.latLng(data.grid.lat_max, data.grid.lon_max)
+          );
+        }
+
+        resetParticles();
+        drawLayer();
+        }
+        updateTimelineDisplay();
+      } catch (e) {
+        console.error('Erreur fetch forecast:', e);
+      }
+    }
+
+    // Gestionnaire du bouton play/pause
+    timelinePlayBtn.addEventListener('click', () => {
+      timelinePlaying = !timelinePlaying;
+      if (timelinePlaying) {
+        timelinePlayBtn.classList.add('playing');
+        timelinePlayBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>';
+        // Animation automatique : avance d'1h toutes les 2 secondes
+        timelineInterval = setInterval(() => {
+          let hour = parseInt(forecastSlider.value, 10) || 0;
+          let day = parseInt(timelineDaySlider.value, 10) || 0;
+          hour++;
+          if (hour > 23) {
+            hour = 0;
+            day++;
+            if (day > 6) {
+              day = 0;
+              timelinePlaying = false;
+              timelinePlayBtn.classList.remove('playing');
+              timelinePlayBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+              if (timelineInterval) clearInterval(timelineInterval);
+              return;
+            }
+            timelineDaySlider.value = day;
+          }
+          forecastSlider.value = hour;
+          updateTimelineDisplay();
+          fetchForecastAtHour(day, hour);
+        }, 2000);
+      } else {
+        timelinePlayBtn.classList.remove('playing');
+        timelinePlayBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        if (timelineInterval) {
+          clearInterval(timelineInterval);
+          timelineInterval = null;
+        }
+      }
+    });
+
+    btnForecast.onclick = () => {
+      forecastMode = true;
+      setActiveButton('btn-forecast');
+      document.getElementById('station-panel').style.display = 'none';
+      forecastPanel.style.display = 'block';
+      forecastTimeline.classList.add('active');
+      updateTimelineLabels();
+      const day = parseInt(timelineDaySlider.value, 10) || 0;
+      const hour = parseInt(forecastSlider.value, 10) || 0;
+      updateTimelineDisplay();
+      fetchForecastAtHour(day, hour);
+      
+      // Si en mode globe, recharger les données (mais garder les anciennes affichées pendant le chargement)
+      if (isGlobeMode) {
+        loadGlobalData(true); // true = mise à jour en arrière-plan
+      }
+    };
+
+    // Gestionnaires pour le slider de timeline (jour)
+    timelineDaySlider.addEventListener('input', (e) => {
+      updateTimelineDisplay();
+    });
+    timelineDaySlider.addEventListener('change', (e) => {
+      const day = parseInt(e.target.value, 10) || 0;
+      const hour = parseInt(forecastSlider.value, 10) || 0;
+      updateTimelineDisplay();
+      fetchForecastAtHour(day, hour);
+    });
+
+    // Gestionnaires pour le slider d'heure
+    forecastSlider.addEventListener('input', (e) => {
+      updateTimelineDisplay();
+    });
+    forecastSlider.addEventListener('change', (e) => {
+      const day = parseInt(timelineDaySlider.value, 10) || 0;
+      const hour = parseInt(e.target.value, 10) || 0;
+      updateTimelineDisplay();
+      fetchForecastAtHour(day, hour);
+    });
+
+    // Gestionnaire pour le changement de modèle
+    forecastModelSelect.addEventListener('change', (e) => {
+      if (forecastMode) {
+        const day = parseInt(timelineDaySlider.value, 10) || 0;
+        const hour = parseInt(forecastSlider.value, 10) || 0;
+        fetchForecastAtHour(day, hour);
+      }
+    });
+
+    // Initialiser les labels de la timeline
+    updateTimelineLabels();
+
+    forecastCloseBtn.onclick = () => {
+      forecastMode = false;
+      forecastPanel.style.display = 'none';
+      forecastTimeline.classList.remove('active');
+      document.getElementById('station-panel').style.display = 'block';
+      setActiveButton(selectedLayer === 'temp' ? 'btn-temp' : 'btn-rh');
+      forecastField = null;
+      // Arrêter l'animation si elle est en cours
+      if (timelinePlaying) {
+        timelinePlaying = false;
+        timelinePlayBtn.classList.remove('playing');
+        timelinePlayBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        if (timelineInterval) {
+          clearInterval(timelineInterval);
+          timelineInterval = null;
+        }
+      }
+      
+      // Recharger les données temps réel
+      if (isGlobeMode) {
+        // Mode globe : recharger les données globales en temps réel (hour=0)
+        console.log('[Globe] Retour au mode temps réel, rechargement des données...');
+        loadGlobalData();
+      } else {
+        // Mode 2D : recharger les données temps réel
+        console.log('[2D] Retour au mode temps réel, rechargement des données...');
+        fetchFieldsAndUpdate();
+      }
+      
+      resetParticles();
+      drawLayer();
+    };
+
+
+    const forecastModeButtons = document.querySelectorAll('.forecast-mode-btn');
+    forecastModeButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const mode = e.target.dataset.mode;
+        forecastModeButtons.forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        document.querySelectorAll('.forecast-content').forEach(c => c.classList.remove('active'));
+        if (mode === 'api') {
+          document.getElementById('forecast-api').classList.add('active');
+          const day = parseInt(timelineDaySlider.value, 10) || 0;
+          const hour = parseInt(forecastSlider.value, 10) || 0;
+          fetchForecastAtHour(day, hour);
+        } else {
+          document.getElementById('forecast-ts').classList.add('active');
+          // Charger les prédictions ML si disponibles
+          loadMLForecast();
+        }
+      });
+    });
+
+    // =======================================================
+    // CHATBOT IA MÉTÉO (Style Messenger)
+    // =======================================================
+    const chatbotIcon = document.getElementById('chatbot-icon');
+    const chatbotWindow = document.getElementById('chatbot-window');
+    const chatbotMessages = document.getElementById('chatbot-messages');
+    const chatbotInput = document.getElementById('chatbot-input');
+    const chatbotSendBtn = document.getElementById('chatbot-send-btn');
+    const chatbotCloseBtn = document.getElementById('chatbot-close-btn');
+    
+    let currentConversationId = null;
+
+    // Ouvrir/fermer la fenêtre de chat
+    chatbotIcon.addEventListener('click', () => {
+      chatbotWindow.classList.toggle('open');
+      if (chatbotWindow.classList.contains('open')) {
+        // Charger les messages de la conversation actuelle si elle existe
+        if (currentConversationId) {
+          loadConversation(currentConversationId);
+        }
+      }
+    });
+
+    chatbotCloseBtn.addEventListener('click', () => {
+      chatbotWindow.classList.remove('open');
+    });
+
+    function formatTime() {
+      const now = new Date();
+      return now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function addChatbotMessage(role, content) {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = `chatbot-message chatbot-message-${role}`;
+      
+      const avatarDiv = document.createElement('div');
+      avatarDiv.className = 'chatbot-message-avatar';
+      avatarDiv.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
+      
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'chatbot-message-content';
+      
+      const textDiv = document.createElement('div');
+      textDiv.className = 'chatbot-message-text';
+      textDiv.textContent = content;
+      
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'chatbot-message-time';
+      timeDiv.textContent = formatTime();
+      
+      contentDiv.appendChild(textDiv);
+      contentDiv.appendChild(timeDiv);
+      
+      messageDiv.appendChild(avatarDiv);
+      messageDiv.appendChild(contentDiv);
+      
+      chatbotMessages.appendChild(messageDiv);
+      
+      // Scroll vers le bas
+      chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+    }
+
+    function addChatbotLoading() {
+      const loadingDiv = document.createElement('div');
+      loadingDiv.id = 'chatbot-loading';
+      loadingDiv.className = 'chatbot-message chatbot-message-assistant';
+      
+      const avatarDiv = document.createElement('div');
+      avatarDiv.className = 'chatbot-message-avatar';
+      avatarDiv.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
+      
+      const contentDiv = document.createElement('div');
+      contentDiv.className = 'chatbot-message-content';
+      
+      const loadingContainer = document.createElement('div');
+      loadingContainer.className = 'chatbot-loading';
+      for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'chatbot-loading-dot';
+        loadingContainer.appendChild(dot);
+      }
+      
+      contentDiv.appendChild(loadingContainer);
+      loadingDiv.appendChild(avatarDiv);
+      loadingDiv.appendChild(contentDiv);
+      
+      chatbotMessages.appendChild(loadingDiv);
+      chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+      
+      return loadingDiv;
+    }
+
+    async function sendChatbotMessage() {
+      const question = chatbotInput.value.trim();
+      if (!question) return;
+
+      // Afficher la question de l'utilisateur
+      addChatbotMessage('user', question);
+      chatbotInput.value = '';
+
+      // Afficher un indicateur de chargement
+      const loadingDiv = addChatbotLoading();
+
+      // Mettre en pause la mise à jour automatique des champs pendant le traitement du chatbot
+      isChatbotActive = true;
+      stopFieldsUpdate();
+
+      try {
+        const requestBody = {
+          question: question,
+          include_forecast: forecastMode,
+          forecast_hour: forecastMode ? getTotalHours(parseInt(timelineDaySlider.value, 10) || 0, parseInt(forecastSlider.value, 10) || 0) : 0,
+          forecast_model: forecastMode ? forecastModelSelect.value : 'auto'
+        };
+        
+        // Ajouter conversation_id si disponible
+        if (currentConversationId) {
+          requestBody.conversation_id = currentConversationId;
+        }
+        
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          throw new Error('Erreur HTTP ' + response.status);
+        }
+
+        const data = await response.json();
+        
+        // Supprimer l'indicateur de chargement
+        loadingDiv.remove();
+        
+        // Mettre à jour conversation_id
+        if (data.conversation_id) {
+          currentConversationId = data.conversation_id;
+        }
+        
+        // Afficher la réponse
+        if (data.status === 'ok' && data.response) {
+          addChatbotMessage('assistant', data.response);
+        } else {
+          addChatbotMessage('assistant', 'Désolé, une erreur s\'est produite lors du traitement de votre question.');
+        }
+      } catch (error) {
+        console.error('Erreur chat:', error);
+        loadingDiv.remove();
+        addChatbotMessage('assistant', 'Erreur de connexion. Veuillez réessayer.');
+      } finally {
+        // Réactiver la mise à jour automatique après la réponse du chatbot
+        isChatbotActive = false;
+        startFieldsUpdate();
+        
+        // Forcer une mise à jour immédiate des champs après la réponse
+        if (!forecastMode) {
+          fetchFieldsAndUpdate();
+        }
+      }
+    }
+    
+    async function loadConversation(conversationId) {
+      try {
+        const response = await fetch(`/api/chat/conversations/${conversationId}`);
+        if (!response.ok) throw new Error('Erreur HTTP ' + response.status);
+        
+        const data = await response.json();
+        if (data.status === 'ok' && data.conversation) {
+          // Vider les messages actuels
+          chatbotMessages.innerHTML = '';
+          
+          // Charger tous les messages
+          const messages = data.conversation.messages || [];
+          messages.forEach(msg => {
+            addChatbotMessage(msg.role, msg.content);
+          });
+          
+          currentConversationId = conversationId;
+        }
+      } catch (error) {
+        console.error('Erreur chargement conversation:', error);
+      }
+    }
+    
+    function startNewConversation() {
+      currentConversationId = null;
+      chatbotMessages.innerHTML = '';
+      addChatbotMessage('assistant', 'Bonjour ! Je suis votre assistant météorologique. Posez-moi des questions sur les données de la station GP2 ou les prévisions Open-Meteo.');
+    }
+
+    chatbotSendBtn.addEventListener('click', sendChatbotMessage);
+    chatbotInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        sendChatbotMessage();
+      }
+    });
+    
+    // Bouton pour nouvelle conversation (à ajouter dans le header si nécessaire)
+    // Pour l'instant, on peut utiliser Ctrl+N ou double-clic sur l'icône
+    chatbotIcon.addEventListener('dblclick', () => {
+      startNewConversation();
+    });
+
+    // =======================================================
+    // PRÉDICTIONS ML - SÉRIE TEMPORELLE
+    // =======================================================
+    const mlForecastBtn = document.getElementById('ml-forecast-btn');
+    const mlForecastResults = document.getElementById('ml-forecast-results');
+    const mlModelsSelect = document.getElementById('ml-models-select');
+
+    async function loadMLForecast() {
+      if (!mlForecastResults) {
+        console.error('mlForecastResults non trouvé');
+        return;
+      }
+      
+      // Récupérer les modèles sélectionnés (checkboxes)
+      const checkboxes = document.querySelectorAll('.ml-model-checkbox:checked');
+      const selectedModels = Array.from(checkboxes).map(cb => cb.value);
+      
+      console.log('[ML Forecast] Modèles sélectionnés:', selectedModels);
+      
+      if (selectedModels.length === 0) {
+        mlForecastResults.innerHTML = '<div style="padding: 12px; color: var(--error);">Veuillez sélectionner au moins un modèle</div>';
+        return;
+      }
+      
+      // Afficher un indicateur de chargement
+      mlForecastResults.innerHTML = '<div style="padding: 12px; text-align: center; color: var(--muted);">Chargement des prédictions ML...</div>';
+      
+      try {
+        // Envoyer tous les modèles sélectionnés séparés par des virgules
+        const modelsParam = selectedModels.join(',');
+        // Construire l'URL avec le paramètre data_dir si disponible
+        let url = `/api/forecast/ml?hours=all&models=${modelsParam}`;
+        if (currentDataDir) {
+          url += `&data_dir=${encodeURIComponent(currentDataDir)}`;
+        }
+        console.log('[ML Forecast] Appel API:', url);
+        
+        // Timeout de 60 secondes pour les prédictions ML (peuvent prendre du temps)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
+        
+        const response = await fetch(url, {
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        console.log('[ML Forecast] Réponse HTTP:', response.status, response.statusText);
+        
+        if (!response.ok) {
+          let errorText = '';
+          try {
+            errorText = await response.text();
+            console.error('[ML Forecast] Erreur HTTP:', errorText);
+          } catch (e) {
+            errorText = `Erreur HTTP ${response.status}`;
+          }
+          throw new Error(`Erreur HTTP ${response.status}: ${errorText.substring(0, 200)}`);
+        }
+        
+        const data = await response.json();
+        console.log('[ML Forecast] Données reçues:', data);
+        
+        if (data.status === 'ok' && data.timeseries) {
+          displayMLForecastResults(data);
+        } else if (data.status === 'error') {
+          mlForecastResults.innerHTML = `<div style="padding: 12px; color: var(--error);">Erreur: ${data.message || data.error || 'Erreur inconnue'}</div>`;
+        } else {
+          mlForecastResults.innerHTML = '<div style="padding: 12px; color: var(--error);">Format de réponse inattendu</div>';
+          console.error('[ML Forecast] Format de réponse inattendu:', data);
+        }
+      } catch (error) {
+        console.error('[ML Forecast] Erreur chargement prédictions ML:', error);
+        if (error.name === 'AbortError') {
+          mlForecastResults.innerHTML = '<div style="padding: 12px; color: var(--error);">Timeout: La requête a pris trop de temps. Veuillez réessayer.</div>';
+        } else if (error.message.includes('Failed to fetch')) {
+          mlForecastResults.innerHTML = '<div style="padding: 12px; color: var(--error);">Erreur de connexion: Impossible de contacter le serveur. Vérifiez que le serveur est démarré.</div>';
+        } else {
+          mlForecastResults.innerHTML = `<div style="padding: 12px; color: var(--error);">Erreur: ${error.message}</div>`;
+        }
+      }
+    }
+
+    function displayMLForecastResults(data) {
+      const timeseries = data.timeseries;
+      const hours = Object.keys(timeseries).map(h => parseInt(h)).sort((a, b) => a - b);
+      
+      if (hours.length === 0) {
+        mlForecastResults.innerHTML = '<div style="padding: 12px; color: var(--error);">Aucune donnée disponible</div>';
+        return;
+      }
+      
+      // Récupérer tous les modèles disponibles (depuis la première heure)
+      const firstHour = hours[0];
+      const firstPredictions = timeseries[firstHour];
+      const allModels = Object.keys(firstPredictions).sort();
+      
+      let html = '<div style="padding: 8px;">';
+      html += '<h4 style="margin: 0 0 10px 0; font-size: 13px; color: var(--text);">Prédictions ML - Station GP2</h4>';
+      
+      // Afficher un tableau par modèle
+      for (const modelName of allModels) {
+        const modelLabel = {
+          'xgb': 'XGBoost',
+          'lgbm': 'LightGBM',
+          'hgbr': 'Histogram Gradient Boosting'
+        }[modelName] || modelName;
+        
+        html += `<div style="margin-bottom: 20px;">`;
+        html += `<h5 style="margin: 0 0 8px 0; font-size: 12px; color: var(--accent);">${modelLabel}</h5>`;
+        
+        // Tableau des prédictions pour ce modèle
+        html += '<table style="width: 100%; border-collapse: collapse; font-size: 10px;">';
+        html += '<thead><tr style="background: rgba(255,255,255,0.05);">';
+        html += '<th style="padding: 4px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);">Heure</th>';
+        html += '<th style="padding: 4px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.1);">Temp (°C)</th>';
+        html += '<th style="padding: 4px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.1);">RH (%)</th>';
+        html += '<th style="padding: 4px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.1);">Vent (m/s)</th>';
+        html += '<th style="padding: 4px; text-align: right; border-bottom: 1px solid rgba(255,255,255,0.1);">Dir (°)</th>';
+        html += '</tr></thead><tbody>';
+        
+        // Vérifier d'abord s'il y a une erreur globale
+        let hasGlobalError = false;
+        let globalErrorMessage = null;
+        const firstHour = hours[0];
+        const firstPredictions = timeseries[firstHour];
+        const firstPred = firstPredictions[modelName];
+        
+        if (!firstPred) {
+          hasGlobalError = true;
+          globalErrorMessage = "Modèle non disponible dans les prédictions";
+        } else if (firstPred.error) {
+          hasGlobalError = true;
+          globalErrorMessage = firstPred.error;
+        }
+        
+        if (hasGlobalError) {
+          html += `<tr><td colspan="5" style="padding: 8px; color: var(--error); text-align: center; background: rgba(255,0,0,0.1);">${globalErrorMessage}</td></tr>`;
+        } else {
+          // Afficher les prédictions pour chaque heure
+          for (const hour of hours) {
+            const predictions = timeseries[hour];
+            const pred = predictions[modelName];
+            
+            if (!pred || pred.error) {
+              // Si une heure spécifique a une erreur, l'afficher
+              const errorMsg = pred && pred.error ? pred.error : "Données non disponibles";
+              html += `<tr style="opacity: 0.6;"><td style="padding: 4px; font-weight: bold;">${hour === 0 ? 'Maintenant' : `+${hour}h`}</td><td colspan="4" style="padding: 4px; color: var(--error);">${errorMsg}</td></tr>`;
+              continue;
+            }
+            
+            const hourLabel = hour === 0 ? 'Maintenant' : `+${hour}h`;
+            
+            html += '<tr>';
+            html += `<td style="padding: 4px; font-weight: bold;">${hourLabel}</td>`;
+            html += `<td style="padding: 4px; text-align: right;">${pred.temp !== null && pred.temp !== undefined ? pred.temp.toFixed(1) : '--'}</td>`;
+            html += `<td style="padding: 4px; text-align: right;">${pred.rh !== null && pred.rh !== undefined ? pred.rh.toFixed(1) : '--'}</td>`;
+            html += `<td style="padding: 4px; text-align: right;">${pred.wind_speed !== null && pred.wind_speed !== undefined ? pred.wind_speed.toFixed(2) : '--'}</td>`;
+            html += `<td style="padding: 4px; text-align: right;">${pred.wind_dir !== null && pred.wind_dir !== undefined ? pred.wind_dir.toFixed(0) : '--'}</td>`;
+            html += '</tr>';
+          }
+        }
+        
+        html += '</tbody></table>';
+        html += '</div>';
+      }
+      
+      html += '</div>';
+      
+      mlForecastResults.innerHTML = html;
+    }
+
+    if (mlForecastBtn) {
+      mlForecastBtn.addEventListener('click', loadMLForecast);
+    }
+
+
+  </script>
+</body>
+</html>

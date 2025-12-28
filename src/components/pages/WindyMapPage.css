@@ -1,0 +1,65 @@
+/* Styles pour la page Windy Map - optimisations maximales pour performance */
+/* Couleurs harmonisées avec l'interface globale */
+.windy-map-page {
+  /* Utiliser les couleurs de l'interface globale */
+  background: var(--background, #0B0F0C);
+  color: var(--foreground, #FFFFFF);
+  font-family: var(--font-body, 'Inter', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial);
+  -webkit-font-smoothing: antialiased;
+  margin: 0;
+  padding: 0;
+  /* Optimisations de performance maximales */
+  contain: layout style paint; /* Containment complet */
+  isolation: isolate; /* Isolation du contexte de stacking */
+  transform: translateZ(0); /* Force l'accélération matérielle */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  /* Pas de will-change pour éviter la consommation mémoire excessive */
+  /* Pas de transitions/animations qui pourraient causer du lag */
+  transition: none;
+  animation: none;
+  /* Optimisation du rendu */
+  content-visibility: auto;
+  /* Force la création d'un nouveau layer de composition */
+  will-change: auto; /* Auto au lieu de transform pour éviter la consommation mémoire */
+}
+
+/* Optimisations maximales pour l'iframe */
+#windy-iframe,
+.windy-iframe-optimized {
+  display: block;
+  border: none;
+  margin: 0;
+  padding: 0;
+  /* Containment maximal pour isoler l'iframe */
+  contain: layout style paint;
+  /* Isolation du contexte de stacking */
+  isolation: isolate;
+  /* Force l'accélération matérielle */
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  /* Optimisations de rendu */
+  pointer-events: auto;
+  /* Position absolue pour éviter les reflows */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Pas de will-change pour éviter la consommation mémoire */
+  will-change: auto;
+  /* Content visibility pour optimiser le rendu */
+  content-visibility: auto;
+  /* Pas de transitions/animations */
+  transition: none;
+  animation: none;
+  /* Optimisation du scrolling si nécessaire */
+  overscroll-behavior: contain;
+  /* Force le GPU rendering */
+  -webkit-transform: translateZ(0);
+  -moz-transform: translateZ(0);
+  -ms-transform: translateZ(0);
+  -o-transform: translateZ(0);
+}
+

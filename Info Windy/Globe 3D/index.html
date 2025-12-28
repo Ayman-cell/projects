@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Globe 3D Windy-like - CesiumJS</title>
+    
+    <!-- Configuration Cesium AVANT le chargement -->
+    <script>
+        // Configurer la base URL de Cesium pour les workers
+        window.CESIUM_BASE_URL = 'https://cdn.jsdelivr.net/npm/cesium@1.112.0/Build/Cesium/';
+    </script>
+    
+    <!-- CesiumJS via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/cesium@1.112.0/Build/Cesium/Cesium.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/cesium@1.112.0/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="cesiumContainer"></div>
+    
+    <div id="controlPanel">
+        <h3>🌍 Contrôles</h3>
+        
+        <div class="control-item">
+            <label>
+                <input type="checkbox" id="windToggle" checked>
+                <span>Vent</span>
+            </label>
+        </div>
+        
+        <div class="control-item">
+            <label for="particleCount">
+                Particules: <span id="particleCountValue">10000</span>
+            </label>
+            <input type="range" id="particleCount" min="1000" max="20000" step="1000" value="10000">
+        </div>
+        
+        <div class="control-item">
+            <label for="windSpeed">
+                Vitesse: <span id="windSpeedValue">1.0</span>
+            </label>
+            <input type="range" id="windSpeed" min="0.1" max="3.0" step="0.1" value="1.0">
+        </div>
+        
+        <div class="control-item">
+            <label for="tempOpacity">
+                Température: <span id="tempOpacityValue">0.6</span>
+            </label>
+            <input type="range" id="tempOpacity" min="0" max="1" step="0.1" value="0.6">
+        </div>
+    </div>
+    
+    <script src="main.js"></script>
+</body>
+</html>
